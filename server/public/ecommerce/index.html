@@ -107,7 +107,7 @@ Domingos: 12:00 - 22:30
           const burger = JSON.parse(btn.dataset.burger);
           modalImg.src = burger.image;
           modalSpecialty.textContent = burger.specialtyBadge;
-          modalPrice.textContent = `$${burger.price.toFixed(2)}`;
+          modalPrice.textContent = `$${Number(burger.price || 0).toFixed(2)}`;
           modalTitle.textContent = burger.name;
           modalDesc.textContent = burger.description;
           modalPrep.textContent = burger.prepTime || '10 min';

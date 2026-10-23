@@ -196,7 +196,10 @@ async function initDB() {
   try {
     if (databaseUrl) {
       console.log(`🔄 [DB] Intentando conectar a MySQL vía DATABASE_URL...`);
-      pool = mysql.createPool(databaseUrl);
+      pool = mysql.createPool({
+        uri: databaseUrl,
+        decimalNumbers: true
+      });
     } else {
       console.log(`🔄 [DB] Intentando conectar a MySQL en ${host}:${port} a la BD "${database}"...`);
       pool = mysql.createPool({
@@ -205,6 +208,7 @@ async function initDB() {
         password,
         database,
         port,
+        decimalNumbers: true,
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
@@ -260,7 +264,12 @@ async function getProducts() {
   if (isConnectedToMySQL && pool) {
     try {
       const [rows] = await pool.query('SELECT * FROM products ORDER BY id ASC');
-      return rows;
+      return rows.map(r => ({
+        ...r,
+        price: parseFloat(r.price) || 0,
+        rating: parseFloat(r.rating) || 0,
+        stock: parseInt(r.stock, 10) || 0
+      }));
     } catch (err) {
       console.error('Error consultando MySQL, recurriendo a memoria temporal:', err.message);
       lastDbError = err.message;

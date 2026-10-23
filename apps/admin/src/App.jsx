@@ -63,7 +63,12 @@ export default function App() {
       const prodRes = await fetch('/api/products');
       const prodData = await prodRes.json();
       if (prodData.success) {
-        setProducts(prodData.data);
+        setProducts(prodData.data.map(p => ({
+          ...p,
+          price: Number(p.price) || 0,
+          stock: parseInt(p.stock, 10) || 0,
+          rating: Number(p.rating) || 4.9
+        })));
       }
 
       // Fetch Metrics
@@ -901,7 +906,7 @@ export default function App() {
                         </td>
                         <td style={{ padding: '12px 6px', fontWeight: '700' }}>{c.totalOrders}</td>
                         <td style={{ padding: '12px 6px', fontWeight: '800', color: 'var(--primary)' }}>
-                          ${c.totalSpent.toFixed(2)}
+                          ${Number(c.totalSpent || 0).toFixed(2)}
                         </td>
                         <td style={{ padding: '12px 6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                           {c.favoriteBurger}
@@ -1060,7 +1065,7 @@ export default function App() {
                       </td>
 
                       <td style={{ padding: '14px 16px', fontWeight: '800', color: 'var(--primary)', fontSize: '1rem' }}>
-                        ${p.price.toFixed(2)}
+                        ${Number(p.price || 0).toFixed(2)}
                       </td>
 
                       <td style={{ padding: '14px 16px' }}>

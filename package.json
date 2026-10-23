@@ -8,7 +8,7 @@
     "build:ecommerce": "npm run build --prefix apps/ecommerce",
     "build:pwa": "npm run build --prefix apps/pwa",
     "build:admin": "npm run build --prefix apps/admin",
-    "build:all": "npm run build:ecommerce && npm run build:pwa && npm run build:admin && node -e \"const fs=require('fs'); fs.mkdirSync('server/public', {recursive:true}); fs.cpSync('apps/ecommerce/dist', 'server/public/ecommerce', {recursive:true}); fs.cpSync('apps/pwa/dist', 'server/public/pwa', {recursive:true}); fs.cpSync('apps/admin/dist', 'server/public/admin', {recursive:true}); console.log('✅ Artefactos sincronizados en server/public');\"",
+    "build:all": "npm run build:ecommerce && npm run build:pwa && npm run build:admin && node -e \"const fs=require('fs'); fs.rmSync('server/public', {recursive:true, force:true}); fs.mkdirSync('server/public', {recursive:true}); fs.cpSync('apps/ecommerce/dist', 'server/public/ecommerce', {recursive:true}); fs.cpSync('apps/pwa/dist', 'server/public/pwa', {recursive:true}); fs.cpSync('apps/admin/dist', 'server/public/admin', {recursive:true}); console.log('✅ Artefactos sincronizados en server/public');\"",
     "build": "npm run build:all",
     "server": "node server/src/app.js",
     "start": "node server/src/app.js"

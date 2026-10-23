@@ -1078,7 +1078,7 @@ const burgers = [
           <div class="card-content">
             <div class="card-header-row">
               <h4 class="card-title">{b.name}</h4>
-              <span class="card-price">${b.price.toFixed(2)}</span>
+              <span class="card-price">${Number(b.price || 0).toFixed(2)}</span>
             </div>
 
             <p class="card-desc">{b.description}</p>
@@ -1314,7 +1314,7 @@ const burgers = [
           const burger = JSON.parse(btn.dataset.burger);
           modalImg.src = burger.image;
           modalSpecialty.textContent = burger.specialtyBadge;
-          modalPrice.textContent = `$${burger.price.toFixed(2)}`;
+          modalPrice.textContent = `$${Number(burger.price || 0).toFixed(2)}`;
           modalTitle.textContent = burger.name;
           modalDesc.textContent = burger.description;
           modalPrep.textContent = burger.prepTime || '10 min';

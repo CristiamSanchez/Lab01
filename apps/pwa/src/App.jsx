@@ -220,7 +220,13 @@ export default function App() {
       .then(res => res.json())
       .then(data => {
         if (data.success && data.data && data.data.length > 0) {
-          setProducts(data.data);
+          const normalized = data.data.map(p => ({
+            ...p,
+            price: Number(p.price) || 0,
+            stock: parseInt(p.stock, 10) || 0,
+            rating: Number(p.rating) || 4.9
+          }));
+          setProducts(normalized);
         }
       })
       .catch(() => {
@@ -246,8 +252,8 @@ export default function App() {
 
   // Add item to cart with customizations
   const addToCart = (product, extras = [], doneness = null) => {
-    const extraCost = extras.reduce((sum, item) => sum + item.price, 0);
-    const unitPrice = product.price + extraCost;
+    const extraCost = extras.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+    const unitPrice = (Number(product.price) || 0) + extraCost;
     const cartItemId = `${product.id}-${extras.map(e => e.id).sort().join('-')}-${doneness || 'default'}`;
 
     setCart(prev => {
@@ -260,7 +266,7 @@ export default function App() {
         id: product.id,
         name: product.name,
         price: unitPrice,
-        basePrice: product.price,
+        basePrice: Number(product.price) || 0,
         image: product.image,
         qty: 1,
         extras,
@@ -296,7 +302,7 @@ export default function App() {
   };
 
   // Totals
-  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const subtotal = cart.reduce((sum, item) => sum + ((Number(item.price) || 0) * (item.qty || 1)), 0);
   const discount = (subtotal * discountPercent) / 100;
   const shipping = subtotal > 25 || discountPercent === 15 ? 0 : (subtotal > 0 ? 2.50 : 0);
   const total = Math.max(0, subtotal - discount + shipping);
@@ -559,7 +565,7 @@ export default function App() {
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '8px' }}>
                       <span style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--primary)' }}>
-                        ${p.price.toFixed(2)}
+                        ${Number(p.price || 0).toFixed(2)}
                       </span>
 
                       <button
@@ -647,10 +653,10 @@ export default function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
                     <div>
                       <span style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--primary)' }}>
-                        ${offer.dealPrice.toFixed(2)}
+                        ${Number(offer.dealPrice || 0).toFixed(2)}
                       </span>
                       <span style={{ fontSize: '0.8rem', color: '#a8a29e', textDecoration: 'line-through', marginLeft: '6px' }}>
-                        ${offer.originalPrice.toFixed(2)}
+                        ${Number(offer.originalPrice || 0).toFixed(2)}
                       </span>
                     </div>
 
@@ -777,7 +783,7 @@ export default function App() {
                       {order.items.map((it, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '3px' }}>
                           <span>{typeof it === 'string' ? it : `${it.qty}x ${it.name}`}</span>
-                          <span style={{ fontWeight: '600' }}>{it.price ? `$${(it.price * (it.qty || 1)).toFixed(2)}` : ''}</span>
+                          <span style={{ fontWeight: '600' }}>{it.price ? `$${(Number(it.price || 0) * (it.qty || 1)).toFixed(2)}` : ''}</span>
                         </div>
                       ))}
                     </div>
@@ -1024,7 +1030,7 @@ export default function App() {
               <div>
                 <h4 style={{ fontSize: '1.05rem', fontWeight: '800' }}>{selectedBurgerForModal.name}</h4>
                 <div style={{ fontSize: '1.15rem', fontWeight: '800', color: 'var(--primary)', marginTop: '2px' }}>
-                  ${selectedBurgerForModal.price.toFixed(2)}
+                  ${Number(selectedBurgerForModal.price || 0).toFixed(2)}
                 </div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                   {selectedBurgerForModal.ingredients}
@@ -1099,7 +1105,7 @@ export default function App() {
                         {isChecked ? '✅ ' : '⬜ '} {extra.label}
                       </div>
                       <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--primary)' }}>
-                        +${extra.price.toFixed(2)}
+                        +${Number(extra.price || 0).toFixed(2)}
                       </span>
                     </div>
                   );
@@ -1124,8 +1130,8 @@ export default function App() {
               }}
             >
               Agregar al Carrito &bull; ${(
-                selectedBurgerForModal.price +
-                customExtras.reduce((s, e) => s + e.price, 0)
+                Number(selectedBurgerForModal.price || 0) +
+                customExtras.reduce((s, e) => s + (Number(e.price) || 0), 0)
               ).toFixed(2)}
             </button>
           </div>
@@ -1207,7 +1213,7 @@ export default function App() {
                             </div>
                           )}
                           <div style={{ fontSize: '0.84rem', fontWeight: '800', color: 'var(--primary)' }}>
-                            ${(item.price * item.qty).toFixed(2)}
+                            ${(Number(item.price || 0) * item.qty).toFixed(2)}
                           </div>
                         </div>
                       </div>
