@@ -1,10 +1,38 @@
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
+  // Authentication State
+  const [authSession, setAuthSession] = useState(() => {
+    try {
+      const saved = localStorage.getItem('rapid_admin_auth');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Login Form State
+  const [loginForm, setLoginForm] = useState({
+    userName: 'admin @ gardenworld.com',
+    password: 'GardenAdmin',
+    parameters: {
+      clientId: 11,
+      roleId: 102,
+      organizationId: 11,
+      warehouseId: 103,
+      language: 'en_US'
+    }
+  });
+  const [showAdvancedErp, setShowAdvancedErp] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+
+  // Dashboard State
   const [activeTab, setActiveTab] = useState('metrics'); // 'metrics' | 'products' | 'database' | 'orders'
   const [products, setProducts] = useState([]);
   const [metrics, setMetrics] = useState(null);
   const [dbStatus, setDbStatus] = useState(null);
+  const [erpConfig, setErpConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -52,6 +80,13 @@ export default function App() {
       if (healthData.database) {
         setDbStatus(healthData.database);
       }
+
+      // Fetch ERP Config
+      const erpRes = await fetch('/api/auth/config');
+      const erpData = await erpRes.json();
+      if (erpData.success) {
+        setErpConfig(erpData.data);
+      }
     } catch (err) {
       console.error('Error fetching admin data:', err);
       showToast('⚠️ Modo sin conexión: Utilizando datos cacheados');
@@ -61,10 +96,74 @@ export default function App() {
   };
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 20000); // refresh every 20s
-    return () => clearInterval(interval);
-  }, []);
+    if (authSession) {
+      loadData();
+      const interval = setInterval(loadData, 20000);
+      return () => clearInterval(interval);
+    }
+  }, [authSession]);
+
+  // Handle iDempiere Login
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+
+    try {
+      // POST to /api/auth/login which proxies to iDempiere POST /api/v1/auth/tokens
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          userName: loginForm.userName.trim(),
+          password: loginForm.password,
+          parameters: {
+            clientId: parseInt(loginForm.parameters.clientId, 10),
+            roleId: parseInt(loginForm.parameters.roleId, 10),
+            organizationId: parseInt(loginForm.parameters.organizationId, 10),
+            warehouseId: parseInt(loginForm.parameters.warehouseId, 10),
+            language: loginForm.parameters.language
+          }
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && data.data) {
+        setAuthSession(data.data);
+        localStorage.setItem('rapid_admin_auth', JSON.stringify(data.data));
+        showToast(`✅ Bienvenido, ${data.data.userName}`);
+      } else {
+        setAuthError(data.error || 'Fallo de autenticación con iDempiere ERP.');
+      }
+    } catch (err) {
+      setAuthError(`Error de red al conectar con el servicio de autenticación: ${err.message}`);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  // Handle Logout
+  const handleLogout = async () => {
+    try {
+      if (authSession?.token) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authSession.token}`
+          }
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+    setAuthSession(null);
+    localStorage.removeItem('rapid_admin_auth');
+    showToast('Sesión de iDempiere cerrada');
+  };
 
   // Update stock
   const handleStockChange = async (id, currentStock, delta) => {
@@ -156,6 +255,271 @@ export default function App() {
     return matchCat && matchSearch;
   });
 
+  // ==============================================================
+  // RENDER: LOGIN SCREEN (Si no hay sesión activa)
+  // ==============================================================
+  if (!authSession) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        background: 'var(--bg)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px'
+      }}>
+        {/* Toast */}
+        {toastMessage && (
+          <div style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            background: '#1c1917',
+            color: '#ffffff',
+            padding: '12px 20px',
+            borderRadius: '12px',
+            boxShadow: 'var(--shadow-lg)',
+            zIndex: 9999,
+            fontSize: '0.9rem',
+            fontWeight: '600'
+          }}>
+            {toastMessage}
+          </div>
+        )}
+
+        <div style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border-accent)',
+          borderRadius: '24px',
+          padding: '40px 36px',
+          maxWidth: '480px',
+          width: '100%',
+          boxShadow: 'var(--shadow-lg)'
+        }}>
+          {/* Logo & Header */}
+          <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '8px' }}>🍔</div>
+            <h1 style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--text)' }}>
+              Hamburger Rapid
+            </h1>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'var(--primary-subtle)',
+              color: '#92400e',
+              border: '1px solid #fde68a',
+              padding: '4px 12px',
+              borderRadius: '9999px',
+              fontSize: '0.75rem',
+              fontWeight: '700',
+              marginTop: '8px'
+            }}>
+              🔐 Acceso Protegido &bull; iDempiere ERP v1
+            </div>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '8px' }}>
+              Autenticación centralizada contra iDempiere REST API v1 (<code>POST /api/v1/auth/tokens</code>)
+            </p>
+          </div>
+
+          {/* Error Alert */}
+          {authError && (
+            <div style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#dc2626',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              fontSize: '0.82rem',
+              marginBottom: '18px',
+              lineHeight: '1.4'
+            }}>
+              ⚠️ {authError}
+            </div>
+          )}
+
+          {/* Form */}
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', marginBottom: '6px', color: 'var(--text)' }}>
+                Usuario ERP (userName) *
+              </label>
+              <input
+                type="text"
+                required
+                value={loginForm.userName}
+                onChange={e => setLoginForm({ ...loginForm, userName: e.target.value })}
+                placeholder="admin @ gardenworld.com"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border)',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  background: 'var(--surface)'
+                }}
+              />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', marginBottom: '6px', color: 'var(--text)' }}>
+                Contraseña (password) *
+              </label>
+              <input
+                type="password"
+                required
+                value={loginForm.password}
+                onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                placeholder="••••••••"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border)',
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  background: 'var(--surface)'
+                }}
+              />
+            </div>
+
+            {/* Advanced ERP Context Parameters */}
+            <div style={{
+              background: 'var(--surface-subtle)',
+              border: '1px solid var(--border)',
+              borderRadius: '12px',
+              padding: '12px 14px'
+            }}>
+              <div
+                onClick={() => setShowAdvancedErp(!showAdvancedErp)}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
+                  color: 'var(--primary)'
+                }}
+              >
+                <span>⚙️ Parámetros de Contexto iDempiere (parameters)</span>
+                <span>{showAdvancedErp ? '▲ Ocultar' : '▼ Ver'}</span>
+              </div>
+
+              {showAdvancedErp && (
+                <div style={{ marginTop: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.78rem' }}>
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '2px' }}>clientId</label>
+                    <input
+                      type="number"
+                      value={loginForm.parameters.clientId}
+                      onChange={e => setLoginForm({ ...loginForm, parameters: { ...loginForm.parameters, clientId: e.target.value } })}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '2px' }}>roleId</label>
+                    <input
+                      type="number"
+                      value={loginForm.parameters.roleId}
+                      onChange={e => setLoginForm({ ...loginForm, parameters: { ...loginForm.parameters, roleId: e.target.value } })}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '2px' }}>organizationId</label>
+                    <input
+                      type="number"
+                      value={loginForm.parameters.organizationId}
+                      onChange={e => setLoginForm({ ...loginForm, parameters: { ...loginForm.parameters, organizationId: e.target.value } })}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '2px' }}>warehouseId</label>
+                    <input
+                      type="number"
+                      value={loginForm.parameters.warehouseId}
+                      onChange={e => setLoginForm({ ...loginForm, parameters: { ...loginForm.parameters, warehouseId: e.target.value } })}
+                      style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Quick autofill helper */}
+            <button
+              type="button"
+              onClick={() => {
+                setLoginForm({
+                  userName: 'admin @ gardenworld.com',
+                  password: 'GardenAdmin',
+                  parameters: {
+                    clientId: 11,
+                    roleId: 102,
+                    organizationId: 11,
+                    warehouseId: 103,
+                    language: 'en_US'
+                  }
+                });
+                showToast('Credenciales GardenWorld cargadas');
+              }}
+              style={{
+                background: 'none',
+                border: '1px dashed var(--border-accent)',
+                color: '#92400e',
+                padding: '8px',
+                borderRadius: '8px',
+                fontSize: '0.78rem',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              💡 Cargar credenciales oficiales iDempiere (admin @ gardenworld.com)
+            </button>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={authLoading}
+              style={{
+                background: 'linear-gradient(135deg, #d97706, #ea580c)',
+                color: 'white',
+                border: 'none',
+                padding: '14px',
+                borderRadius: '12px',
+                fontWeight: '800',
+                fontSize: '0.95rem',
+                cursor: authLoading ? 'not-allowed' : 'pointer',
+                boxShadow: 'var(--shadow-md)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                marginTop: '6px'
+              }}
+            >
+              {authLoading ? '🔄 Conectando con iDempiere...' : 'Ingresar al Panel de Control →'}
+            </button>
+          </form>
+
+          {/* Quick links */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', marginTop: '22px', fontSize: '0.82rem' }}>
+            <a href="/" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>🌐 Ir a E-commerce</a>
+            <span style={{ color: '#d6d3d1' }}>&bull;</span>
+            <a href="/app/" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>📱 Ir a PWA Mobile</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==============================================================
+  // RENDER: AUTHENTICATED ADMIN DASHBOARD
+  // ==============================================================
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', color: 'var(--text)', display: 'flex', flexDirection: 'column' }}>
       
@@ -214,13 +578,31 @@ export default function App() {
               </span>
             </div>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Panel de control de operaciones, catálogo y métricas de consumo en vivo
+              Panel comercial autenticado con iDempiere ERP REST API v1
             </p>
           </div>
         </div>
 
-        {/* Database Quick Pill & Nav Links */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        {/* User Context, Database Pill, and Logout */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Authenticated ERP User Card */}
+          <div style={{
+            background: 'var(--surface-subtle)',
+            border: '1px solid var(--border)',
+            padding: '6px 12px',
+            borderRadius: '10px',
+            fontSize: '0.78rem',
+            textAlign: 'right'
+          }}>
+            <div style={{ fontWeight: '800', color: 'var(--text)' }}>
+              👤 {authSession.userName}
+            </div>
+            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+              Org: {authSession.erpContext?.organizationId || 11} &bull; Rol: {authSession.erpContext?.roleId || 102}
+            </div>
+          </div>
+
+          {/* Database Status Pill */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -250,9 +632,9 @@ export default function App() {
               color: 'var(--text)',
               background: 'var(--surface-subtle)',
               border: '1px solid var(--border)',
-              padding: '8px 14px',
+              padding: '8px 12px',
               borderRadius: '8px',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: '600'
             }}
           >
@@ -260,22 +642,57 @@ export default function App() {
           </a>
 
           <a
-            href="/app"
+            href="/app/"
             style={{
               textDecoration: 'none',
               color: 'white',
               background: 'linear-gradient(135deg, #d97706, #ea580c)',
-              padding: '8px 16px',
+              padding: '8px 14px',
               borderRadius: '8px',
-              fontSize: '0.85rem',
+              fontSize: '0.82rem',
               fontWeight: '700',
               boxShadow: 'var(--shadow-sm)'
             }}
           >
             📱 PWA Mobile
           </a>
+
+          <button
+            onClick={handleLogout}
+            title="Cerrar sesión de iDempiere ERP"
+            style={{
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#dc2626',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              fontSize: '0.82rem',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}
+          >
+            🚪 Salir
+          </button>
         </div>
       </header>
+
+      {/* Contingency Banner if ERP operates in fallback */}
+      {authSession.source === 'idempiere-contingency-mode' && (
+        <div style={{
+          background: '#fffbeb',
+          borderBottom: '1px solid #fde68a',
+          color: '#92400e',
+          padding: '8px 28px',
+          fontSize: '0.78rem',
+          fontWeight: '700',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span>🛡️ MODO CONTINGENCIA TOLERANTE A FALLOS:</span>
+          <span>{authSession.contingencyReason}</span>
+        </div>
+      )}
 
       {/* Main Container */}
       <div style={{ maxWidth: '1240px', width: '100%', margin: '0 auto', padding: '24px 28px', flex: 1 }}>
@@ -293,7 +710,7 @@ export default function App() {
             { id: 'metrics', label: '📊 Métricas de Consumidores', count: null },
             { id: 'products', label: '🍔 Catálogo de Hamburguesas', count: products.length },
             { id: 'orders', label: '🛵 Órdenes en Tiempo Real', count: metrics?.recentOrders?.length || null },
-            { id: 'database', label: '🗄️ Monitor de Base de Datos', count: dbStatus?.mode || 'Demo' }
+            { id: 'database', label: '🗄️ Monitor DB & iDempiere ERP', count: 'v1.0' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -332,9 +749,7 @@ export default function App() {
           ))}
         </div>
 
-        {/* ============================================================== */}
         {/* TAB 1: CONSUMER & SALES METRICS */}
-        {/* ============================================================== */}
         {activeTab === 'metrics' && (
           <div>
             {/* KPI Summary Cards */}
@@ -400,17 +815,12 @@ export default function App() {
                   </p>
                 </div>
                 <span style={{ background: 'var(--primary-subtle)', color: '#92400e', border: '1px solid #fde68a', padding: '4px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: '700' }}>
-                  Actualizado en Tiempo Real
+                  Sincronizado con iDempiere
                 </span>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
-                {(metrics?.customerSegmentation || [
-                  { tier: 'VIP Platinum Gourmet', percentage: 26, count: 322, avgMonthlySpend: '$120 - $240', description: 'Clientes de alta fidelidad (> 4 compras/mes)' },
-                  { tier: 'Frecuentes Gold', percentage: 44, count: 545, avgMonthlySpend: '$60 - $119', description: 'Consumo habitual 1 a 2 veces por semana' },
-                  { tier: 'Ocasionales Silver', percentage: 20, count: 248, avgMonthlySpend: '$25 - $59', description: 'Consumo quincenal o de fin de semana' },
-                  { tier: 'Nuevos Clientes Bronce', percentage: 10, count: 125, avgMonthlySpend: '$10 - $24', description: 'Primera o segunda orden registrada' }
-                ]).map((seg, idx) => (
+                {(metrics?.customerSegmentation || []).map((seg, idx) => (
                   <div
                     key={idx}
                     style={{
@@ -425,7 +835,6 @@ export default function App() {
                       <span style={{ fontSize: '1.1rem', fontWeight: '800', color: 'var(--primary)' }}>{seg.percentage}%</span>
                     </div>
 
-                    {/* Progress Bar */}
                     <div style={{ height: '7px', background: '#e7dfd5', borderRadius: '9999px', overflow: 'hidden', marginBottom: '10px' }}>
                       <div style={{
                         height: '100%',
@@ -444,162 +853,71 @@ export default function App() {
               </div>
             </div>
 
-            {/* Two Column Grid: Top Consumers & Top Burgers */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '24px', marginBottom: '28px' }}>
-              
-              {/* Top Consumers Table */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '18px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: '800', marginBottom: '6px' }}>
-                  Top 5 Consumidores del Mes
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                  Clientes con mayor volumen de gasto acumulado y pedidos
-                </p>
-
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
-                        <th style={{ padding: '8px 6px', fontWeight: '700' }}>Cliente</th>
-                        <th style={{ padding: '8px 6px', fontWeight: '700' }}>Nivel</th>
-                        <th style={{ padding: '8px 6px', fontWeight: '700' }}>Pedidos</th>
-                        <th style={{ padding: '8px 6px', fontWeight: '700' }}>Total Gastado</th>
-                        <th style={{ padding: '8px 6px', fontWeight: '700' }}>Favorita</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(metrics?.topConsumers || [
-                        { id: 1, name: 'Sofía Valenzuela', email: 'sofia.v@gmail.com', avatar: '👩🏻', tier: 'VIP Platinum', totalOrders: 38, totalSpent: 642.50, favoriteBurger: 'Rey de las Burgers' },
-                        { id: 2, name: 'Carlos Rodríguez', email: 'carlos.r@outlook.com', avatar: '👨🏽', tier: 'VIP Platinum', totalOrders: 32, totalSpent: 518.20, favoriteBurger: 'Burger Real Doble' },
-                        { id: 3, name: 'Andrea Morales', email: 'andrea.m@gmail.com', avatar: '👩🏼', tier: 'Frecuente Gold', totalOrders: 27, totalSpent: 412.00, favoriteBurger: 'Smash Trufa Imperial' },
-                        { id: 4, name: 'Fernando Castro', email: 'fcastro@empresa.com', avatar: '👨🏻', tier: 'Frecuente Gold', totalOrders: 21, totalSpent: 329.80, favoriteBurger: 'Burger Doble Especial' },
-                        { id: 5, name: 'Valentina Ríos', email: 'vrios@tech.io', avatar: '👩🏽', tier: 'Frecuente Gold', totalOrders: 18, totalSpent: 278.40, favoriteBurger: 'Burger Real Clásica' }
-                      ]).map(c => (
-                        <tr key={c.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '12px 6px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ fontSize: '1.2rem' }}>{c.avatar}</span>
-                              <div>
-                                <strong style={{ color: 'var(--text)', display: 'block' }}>{c.name}</strong>
-                                <span style={{ fontSize: '0.72rem', color: '#a8a29e' }}>{c.email}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td style={{ padding: '12px 6px' }}>
-                            <span style={{
-                              background: c.tier.includes('Platinum') ? '#fef3c7' : '#f0fdf4',
-                              color: c.tier.includes('Platinum') ? '#92400e' : '#166534',
-                              border: '1px solid',
-                              borderColor: c.tier.includes('Platinum') ? '#fde68a' : '#bbf7d0',
-                              padding: '2px 8px',
-                              borderRadius: '6px',
-                              fontSize: '0.7rem',
-                              fontWeight: '700'
-                            }}>
-                              {c.tier}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px 6px', fontWeight: '700' }}>{c.totalOrders}</td>
-                          <td style={{ padding: '12px 6px', fontWeight: '800', color: 'var(--primary)' }}>
-                            ${c.totalSpent.toFixed(2)}
-                          </td>
-                          <td style={{ padding: '12px 6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                            {c.favoriteBurger}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Top Selling Burgers Ranking */}
-              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '18px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: '800', marginBottom: '6px' }}>
-                  Hamburguesas Más Pedidas
-                </h3>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
-                  Ranking de ventas por volumen de pedidos
-                </p>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {(metrics?.topSellingBurgers || [
-                    { name: 'Rey de las Burgers', specialty: '👑 Firma de la Casa', salesCount: 142, revenue: 2270.58, percentage: 32 },
-                    { name: 'Burger Real Doble', specialty: '🔥 Doble Corona', salesCount: 98, revenue: 1371.02, percentage: 22 },
-                    { name: 'Burger Real Clásica', specialty: '⭐ Clásica Destacada', salesCount: 86, revenue: 945.14, percentage: 19 },
-                    { name: 'Burger Doble Especial', specialty: '💎 Ultra Especial', salesCount: 65, revenue: 942.50, percentage: 15 },
-                    { name: 'Smash Trufa Imperial', specialty: '🥇 Selección Gourmet', salesCount: 54, revenue: 917.46, percentage: 12 }
-                  ]).map((b, idx) => (
-                    <div key={idx}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px', fontSize: '0.85rem' }}>
-                        <div>
-                          <strong>{idx + 1}. {b.name}</strong>
-                          <span style={{ fontSize: '0.72rem', color: '#92400e', marginLeft: '6px' }}>{b.specialty}</span>
-                        </div>
-                        <span style={{ fontWeight: '800', color: 'var(--primary)' }}>{b.salesCount} vendidos</span>
-                      </div>
-                      <div style={{ height: '7px', background: '#e7dfd5', borderRadius: '9999px', overflow: 'hidden' }}>
-                        <div style={{
-                          height: '100%',
-                          width: `${b.percentage * 2.5}%`,
-                          background: 'linear-gradient(90deg, #d97706, #ea580c)',
-                          borderRadius: '9999px'
-                        }} />
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px', textAlign: 'right' }}>
-                        Recaudación: ${b.revenue.toFixed(2)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Hourly Peak Curve */}
+            {/* Top Consumers Table */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '18px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: '800', marginBottom: '4px' }}>
-                Picos de Consumo Horario
+              <h3 style={{ fontSize: '1.15rem', fontWeight: '800', marginBottom: '6px' }}>
+                Top 5 Consumidores del Mes
               </h3>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '18px' }}>
-                Volumen de órdenes por hora del día (Hora pico almuerzo: 13:00 / Cena: 20:00)
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                Clientes con mayor volumen de gasto acumulado y pedidos
               </p>
 
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: '16px', height: '140px', paddingTop: '20px' }}>
-                {(metrics?.hourlyConsumptionPeak || [
-                  { hour: '11:00', orders: 18 },
-                  { hour: '12:00', orders: 54 },
-                  { hour: '13:00', orders: 92 },
-                  { hour: '14:00', orders: 78 },
-                  { hour: '19:00', orders: 65 },
-                  { hour: '20:00', orders: 115 },
-                  { hour: '21:00', orders: 88 },
-                  { hour: '22:00', orders: 42 }
-                ]).map((h, i) => (
-                  <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
-                    <span style={{ fontSize: '0.72rem', fontWeight: '700', color: 'var(--primary)', marginBottom: '4px' }}>
-                      {h.orders}
-                    </span>
-                    <div style={{
-                      width: '100%',
-                      maxWidth: '38px',
-                      height: `${(h.orders / 115) * 90}%`,
-                      background: h.orders >= 90 ? 'linear-gradient(180deg, #ea580c, #d97706)' : '#fed7aa',
-                      borderRadius: '6px 6px 0 0'
-                    }} />
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px' }}>{h.hour}</span>
-                  </div>
-                ))}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '8px 6px', fontWeight: '700' }}>Cliente</th>
+                      <th style={{ padding: '8px 6px', fontWeight: '700' }}>Nivel</th>
+                      <th style={{ padding: '8px 6px', fontWeight: '700' }}>Pedidos</th>
+                      <th style={{ padding: '8px 6px', fontWeight: '700' }}>Total Gastado</th>
+                      <th style={{ padding: '8px 6px', fontWeight: '700' }}>Favorita</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(metrics?.topConsumers || []).map(c => (
+                      <tr key={c.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '12px 6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '1.2rem' }}>{c.avatar}</span>
+                            <div>
+                              <strong style={{ color: 'var(--text)', display: 'block' }}>{c.name}</strong>
+                              <span style={{ fontSize: '0.72rem', color: '#a8a29e' }}>{c.email}</span>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px 6px' }}>
+                          <span style={{
+                            background: c.tier.includes('Platinum') ? '#fef3c7' : '#f0fdf4',
+                            color: c.tier.includes('Platinum') ? '#92400e' : '#166534',
+                            border: '1px solid',
+                            borderColor: c.tier.includes('Platinum') ? '#fde68a' : '#bbf7d0',
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            fontSize: '0.7rem',
+                            fontWeight: '700'
+                          }}>
+                            {c.tier}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px 6px', fontWeight: '700' }}>{c.totalOrders}</td>
+                        <td style={{ padding: '12px 6px', fontWeight: '800', color: 'var(--primary)' }}>
+                          ${c.totalSpent.toFixed(2)}
+                        </td>
+                        <td style={{ padding: '12px 6px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          {c.favoriteBurger}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
 
-        {/* ============================================================== */}
         {/* TAB 2: BURGER CATALOG MANAGEMENT */}
-        {/* ============================================================== */}
         {activeTab === 'products' && (
           <div>
-            {/* Top Toolbar */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -608,7 +926,6 @@ export default function App() {
               marginBottom: '20px',
               flexWrap: 'wrap'
             }}>
-              {/* Search & Filter */}
               <div style={{ display: 'flex', gap: '10px', flex: 1, maxWidth: '600px' }}>
                 <input
                   type="text"
@@ -643,11 +960,9 @@ export default function App() {
                   <option value="Gourmet">Gourmet</option>
                   <option value="Pollo Crispy">Pollo Crispy</option>
                   <option value="Complementos">Complementos</option>
-                  <option value="Bebidas">Bebidas</option>
                 </select>
               </div>
 
-              {/* Actions */}
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button
                   onClick={handleResetCatalog}
@@ -687,7 +1002,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Table of Burgers */}
             <div style={{
               background: 'var(--surface)',
               border: '1px solid var(--border)',
@@ -799,16 +1113,14 @@ export default function App() {
           </div>
         )}
 
-        {/* ============================================================== */}
         {/* TAB 3: REAL-TIME SIMULATED ORDERS */}
-        {/* ============================================================== */}
         {activeTab === 'orders' && (
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '18px', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: '800' }}>Órdenes Simuladas en Vivo</h3>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: '800' }}>Órdenes Sincronizadas PWA</h3>
                 <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                  Pedidos registrados desde la aplicación móvil PWA sincronizados en tiempo real
+                  Pedidos registrados desde la aplicación móvil PWA
                 </p>
               </div>
               <button
@@ -863,7 +1175,7 @@ export default function App() {
                       <strong>Items:</strong> {Array.isArray(ord.items) ? ord.items.join(', ') : ord.items}
                     </div>
                     <div style={{ fontSize: '0.74rem', color: '#a8a29e', marginTop: '2px' }}>
-                      📍 {ord.address} &bull; {new Date(ord.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      📍 {ord.address}
                     </div>
                   </div>
 
@@ -892,19 +1204,70 @@ export default function App() {
           </div>
         )}
 
-        {/* ============================================================== */}
-        {/* TAB 4: DATABASE & INFRASTRUCTURE MONITOR */}
-        {/* ============================================================== */}
+        {/* TAB 4: DATABASE & iDEMPIERE ERP MONITOR */}
         {activeTab === 'database' && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
             
-            {/* Status Card */}
+            {/* iDempiere ERP Card */}
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '18px', padding: '26px', boxShadow: 'var(--shadow-sm)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                <span style={{ fontSize: '1.8rem' }}>🏢</span>
+                <div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '800' }}>iDempiere ERP REST API v1</h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Módulo de Autenticación y Control de Acceso</p>
+                </div>
+              </div>
+
+              <div style={{
+                background: authSession.source === 'idempiere-live-erp' ? 'var(--success-subtle)' : '#fffbeb',
+                border: `1px solid ${authSession.source === 'idempiere-live-erp' ? '#bbf7d0' : '#fde68a'}`,
+                borderRadius: '12px',
+                padding: '16px',
+                marginBottom: '18px'
+              }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: '700', color: authSession.source === 'idempiere-live-erp' ? '#166534' : '#92400e' }}>
+                  ESTADO DE SESIÓN ERP
+                </div>
+                <div style={{ fontSize: '1.15rem', fontWeight: '800', marginTop: '4px', color: authSession.source === 'idempiere-live-erp' ? 'var(--success)' : '#b45309' }}>
+                  {authSession.source === 'idempiere-live-erp' ? '🟢 Conectado en Vivo a iDempiere ERP' : '🛡️ Sesión Activa en Modo Contingencia'}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Usuario: <strong>{authSession.userName}</strong> &bull; Token: <code>{authSession.token.slice(0, 20)}...</code>
+                </div>
+              </div>
+
+              {/* Technical Specifications */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Endpoint Base:</span>
+                  <strong>POST /api/v1/auth/tokens</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Cabeceras Obligatorias:</span>
+                  <strong>Content-Type & Accept: application/json</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Organización (organizationId):</span>
+                  <strong>{authSession.erpContext?.organizationId || 11}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Almacén (warehouseId):</span>
+                  <strong>{authSession.erpContext?.warehouseId || 103}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Rol ERP (roleId):</span>
+                  <strong>{authSession.erpContext?.roleId || 102}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Database Engine Card */}
             <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '18px', padding: '26px', boxShadow: 'var(--shadow-sm)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
                 <span style={{ fontSize: '1.8rem' }}>🐬</span>
                 <div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: '800' }}>Motor de Base de Datos</h3>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Arquitectura tolerante a fallos con modo fallback dual</p>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: '800' }}>Base de Datos del Sistema</h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Catálogo de Hamburguesas y Órdenes</p>
                 </div>
               </div>
 
@@ -913,87 +1276,31 @@ export default function App() {
                 border: `1px solid ${dbStatus?.connected ? '#bbf7d0' : '#fde68a'}`,
                 borderRadius: '12px',
                 padding: '16px',
-                marginBottom: '20px'
+                marginBottom: '18px'
               }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: '700', color: dbStatus?.connected ? '#166534' : '#92400e', textTransform: 'uppercase' }}>
-                  ESTADO DE CONEXIÓN
+                <div style={{ fontSize: '0.75rem', fontWeight: '700', color: dbStatus?.connected ? '#166534' : '#92400e' }}>
+                  MOTOR ACTIVO
                 </div>
-                <div style={{ fontSize: '1.3rem', fontWeight: '800', color: dbStatus?.connected ? 'var(--success)' : '#b45309', marginTop: '4px' }}>
-                  {dbStatus?.connected ? '✅ MySQL Conectado & Operativo' : '⚡ Modo In-Memory Activo (Modo Seguro)'}
+                <div style={{ fontSize: '1.15rem', fontWeight: '800', marginTop: '4px', color: dbStatus?.connected ? 'var(--success)' : '#b45309' }}>
+                  {dbStatus?.connected ? '✅ MySQL Conectado (Producción)' : '⚡ Modo In-Memory Activo'}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px' }}>
-                  Host: <strong>{dbStatus?.host || 'Auto-discovery'}</strong> &bull; BD: <strong>{dbStatus?.database || 'hamburger_rapid'}</strong>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Host: <strong>{dbStatus?.host || 'In-Memory Fallback'}</strong> &bull; BD: <strong>{dbStatus?.database || 'hamburger_rapid'}</strong>
                 </div>
               </div>
 
-              {/* Specs */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Modo Activo:</span>
-                  <strong>{dbStatus?.mode?.toUpperCase() || 'IN-MEMORY'}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Puerto DB:</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.82rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Puerto:</span>
                   <strong>{dbStatus?.port || 3306}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Usuario Configurado:</span>
-                  <strong>{dbStatus?.user || 'rapid_admin'}</strong>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Productos en Catálogo:</span>
+                  <strong>{products.length} hamburguesas</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Latencia de Respuesta API:</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Latencia API:</span>
                   <strong style={{ color: 'var(--success)' }}>&lt; 5 ms</strong>
-                </div>
-              </div>
-
-              <button
-                onClick={loadData}
-                style={{
-                  width: '100%',
-                  marginTop: '20px',
-                  background: 'var(--primary)',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px',
-                  borderRadius: '10px',
-                  fontWeight: '700',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer'
-                }}
-              >
-                🔄 Probar Reconexión / Ping
-              </button>
-            </div>
-
-            {/* Architecture Explanation Card */}
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '18px', padding: '26px', boxShadow: 'var(--shadow-sm)' }}>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: '800', marginBottom: '8px' }}>
-                Detalles de Resiliencia y Dokploy
-              </h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '18px' }}>
-                El backend de Hamburger Rapid está diseñado con alta disponibilidad para no interrumpir el servicio ni el frontend en caso de desconexión del servidor MySQL.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div style={{ background: 'var(--surface-subtle)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                  <strong style={{ fontSize: '0.88rem', color: 'var(--text)' }}>🐬 Modo Producción MySQL</strong>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Se activa automáticamente cuando se definen las variables <code>DB_HOST</code> o <code>DATABASE_URL</code> en el contenedor de Dokploy. Inicializa la tabla <code>products</code> con las 10 hamburguesas maestras.
-                  </p>
-                </div>
-
-                <div style={{ background: 'var(--surface-subtle)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                  <strong style={{ fontSize: '0.88rem', color: 'var(--text)' }}>⚡ Modo Fallback In-Memory</strong>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    Si MySQL no está disponible durante demostraciones o desarrollo local, la plataforma opera en memoria volátil de alta velocidad sin lanzar excepciones 500, permitiendo crear, consultar y eliminar productos.
-                  </p>
-                </div>
-
-                <div style={{ background: 'var(--surface-subtle)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                  <strong style={{ fontSize: '0.88rem', color: 'var(--text)' }}>🩺 Dokploy Health Checks</strong>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                    El endpoint <code>/api/health</code> responde con código 200 y el estado de la base de datos para monitoreo continuo de contenedores.
-                  </p>
                 </div>
               </div>
             </div>
@@ -1140,19 +1447,6 @@ export default function App() {
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '700', marginBottom: '4px' }}>
-                  Ingredientes principales
-                </label>
-                <input
-                  type="text"
-                  placeholder="Carne Angus 200g, Cheddar madurado, Pan brioche..."
-                  value={newBurger.ingredients}
-                  onChange={e => setNewBurger({ ...newBurger, ingredients: e.target.value })}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '0.85rem' }}
-                />
-              </div>
-
               <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
                 <button
                   type="button"
@@ -1201,7 +1495,7 @@ export default function App() {
         color: 'var(--text-muted)',
         marginTop: 'auto'
       }}>
-        Hamburger Rapid &bull; Panel de Control Administrativo &bull; Dokploy CI/CD Live Demo
+        Hamburger Rapid &bull; Panel de Control Administrativo &bull; Autenticación iDempiere ERP REST API v1
       </footer>
 
     </div>

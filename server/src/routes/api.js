@@ -1,6 +1,60 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const idempiereService = require('../services/idempiereService');
+
+// ========================================================
+// iDempiere ERP Authentication & Access Control Endpoints
+// ========================================================
+
+// 1. Login endpoint (POST /api/v1/auth/tokens via proxy)
+router.post('/auth/login', async (req, res) => {
+  try {
+    const { userName, password, parameters } = req.body;
+    if (!userName || !password) {
+      return res.status(400).json({ success: false, error: 'Nombre de usuario y contraseña son requeridos.' });
+    }
+
+    const session = await idempiereService.authenticate({ userName, password, parameters });
+    res.json({
+      success: true,
+      message: 'Autenticación con iDempiere ERP exitosa',
+      data: session
+    });
+  } catch (error) {
+    res.status(401).json({ success: false, error: error.message });
+  }
+});
+
+// 2. Verify active session token
+router.get('/auth/verify', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '') || req.query.token;
+
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Token no proporcionado.' });
+  }
+
+  const session = idempiereService.verifySession(token);
+  if (!session) {
+    return res.status(401).json({ success: false, error: 'Token inválido o sesión expirada.' });
+  }
+
+  res.json({ success: true, data: session });
+});
+
+// 3. Logout endpoint
+router.post('/auth/logout', (req, res) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.replace(/^Bearer\s+/i, '') || req.body?.token;
+  idempiereService.logout(token);
+  res.json({ success: true, message: 'Sesión revocada exitosamente.' });
+});
+
+// 4. ERP Config & Integration Info
+router.get('/auth/config', (req, res) => {
+  res.json({ success: true, data: idempiereService.getErpConfig() });
+});
 
 // In-memory simulated orders & customer registry to sync PWA and Admin
 let simulatedOrders = [
