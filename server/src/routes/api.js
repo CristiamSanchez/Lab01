@@ -1,24 +1,24 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
-const idempiereService = require('../services/idempiereService');
+const authService = require('../services/authService');
 
 // ========================================================
-// iDempiere ERP Authentication & Access Control Endpoints
+// Hamburger Rapid Central • Authentication & Server Telemetry
 // ========================================================
 
-// 1. Login endpoint (POST /api/v1/auth/tokens via proxy)
+// 1. Corporate Login endpoint
 router.post('/auth/login', async (req, res) => {
   try {
     const { userName, password, parameters } = req.body;
     if (!userName || !password) {
-      return res.status(400).json({ success: false, error: 'Nombre de usuario y contraseña son requeridos.' });
+      return res.status(400).json({ success: false, error: 'Usuario y contraseña son requeridos.' });
     }
 
-    const session = await idempiereService.authenticate({ userName, password, parameters });
+    const session = await authService.authenticate({ userName, password, parameters });
     res.json({
       success: true,
-      message: 'Autenticación con iDempiere ERP exitosa',
+      message: 'Autenticación corporativa exitosa',
       data: session
     });
   } catch (error) {
@@ -35,7 +35,7 @@ router.get('/auth/verify', (req, res) => {
     return res.status(401).json({ success: false, error: 'Token no proporcionado.' });
   }
 
-  const session = idempiereService.verifySession(token);
+  const session = authService.verifySession(token);
   if (!session) {
     return res.status(401).json({ success: false, error: 'Token inválido o sesión expirada.' });
   }
@@ -47,13 +47,25 @@ router.get('/auth/verify', (req, res) => {
 router.post('/auth/logout', (req, res) => {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace(/^Bearer\s+/i, '') || req.body?.token;
-  idempiereService.logout(token);
+  authService.logout(token);
   res.json({ success: true, message: 'Sesión revocada exitosamente.' });
 });
 
-// 4. ERP Config & Integration Info
+// 4. Server Configuration & Profile Endpoint
 router.get('/auth/config', (req, res) => {
-  res.json({ success: true, data: idempiereService.getErpConfig() });
+  res.json({ success: true, data: authService.getServerConfig() });
+});
+
+router.post('/auth/config', (req, res) => {
+  const updated = authService.updateServerConfig(req.body);
+  res.json({ success: true, message: 'Configuración de servidor actualizada', data: updated });
+});
+
+// 5. Test Server Connectivity Ping
+router.post('/auth/ping', async (req, res) => {
+  const { serverUrl } = req.body;
+  const result = await authService.testServerConnectivity(serverUrl);
+  res.json({ success: true, data: result });
 });
 
 // In-memory simulated orders & customer registry to sync PWA and Admin
