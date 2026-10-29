@@ -1,5 +1,34 @@
 import React, { useState, useEffect } from 'react';
 
+// Multi-Tenant Context Options strictly matching user's mockups
+const MULTI_TENANT_OPTIONS = {
+  entities: [
+    'GardenWorld (#11)',
+    'Hamburger Rapid Global (#1)',
+    'Tasty Bites Central Corp (#12)',
+    'Franquicias & Operaciones Internacionales (#15)'
+  ],
+  roles: [
+    'GardenWorld Admin (#102)',
+    'Super Administrador Corporativo (#100)',
+    'Gerente de Operaciones & Franquicias (#104)',
+    'Auditor Financiero & Control (#105)'
+  ],
+  divisions: [
+    'HQ (#11)',
+    'Sucursal Norte (#12)',
+    'Sucursal Centro Histórico (#13)',
+    'Sucursal Mall Plaza (#14)',
+    'Hub Cocina Oculta Dark Kitchen (#15)'
+  ],
+  warehouses: [
+    'HQ Warehouse (#103)',
+    'Almacén Central Cocina (#104)',
+    'Almacén Refrigerados & Carnes (#105)',
+    'Centro Logístico Despacho Rápido (#106)'
+  ]
+};
+
 export default function App() {
   // Authentication State
   const [authSession, setAuthSession] = useState(() => {
@@ -11,11 +40,23 @@ export default function App() {
     }
   });
 
-  // Login Form State (Strictly matching Image 1: Tasty Bites / Hamburger Rapid Central)
+  // Step state for 2-step authentication: 1 = Credentials, 2 = Multi-Tenant Selection
+  const [loginStep, setLoginStep] = useState(1);
+
+  // Login Form Step 1: Credentials
   const [loginForm, setLoginForm] = useState({
     userName: 'admin @ gardenworld.com',
     password: 'GardenAdmin'
   });
+
+  // Login Form Step 2: Multi-Tenant Context Selection (matching media_1793307438143.jpg)
+  const [multiTenantForm, setMultiTenantForm] = useState({
+    entity: 'GardenWorld (#11)',
+    role: 'GardenWorld Admin (#102)',
+    division: 'HQ (#11)',
+    warehouse: 'HQ Warehouse (#103)'
+  });
+
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -24,17 +65,23 @@ export default function App() {
   // 'catalog' | 'metrics' | 'telemetry' | 'profile'
   const [activeTab, setActiveTab] = useState('catalog');
 
-  // Server & Connection Profile State (Matching Image 2)
-  const [serverConfig, setServerConfig] = useState({
-    serverUrl: window.location.origin || 'http://localhost:3000',
-    corsProxy: false,
-    multiTenant: false,
-    clientId: 11,
-    clientName: 'Hamburger Rapid Global',
-    organizationId: 'Org #11',
-    roleId: 'Rol #102',
-    warehouseId: 'Almacén #103',
-    language: 'en_US'
+  // Server & Connection Profile State (Matching Image 2 and Image 3)
+  const [serverConfig, setServerConfig] = useState(() => {
+    const savedMt = localStorage.getItem('rapid_corp_multitenant');
+    return {
+      serverUrl: window.location.origin || 'http://localhost:3000',
+      corsProxy: false,
+      multiTenant: savedMt !== null ? savedMt === 'true' : false,
+      clientId: 11,
+      clientName: 'GardenWorld (#11)',
+      organizationId: 'HQ (#11)',
+      organizationName: 'HQ (#11)',
+      roleId: 'GardenWorld Admin (#102)',
+      roleName: 'GardenWorld Admin (#102)',
+      warehouseId: 'HQ Warehouse (#103)',
+      warehouseName: 'HQ Warehouse (#103)',
+      language: 'en_US'
+    };
   });
 
   // Connectivity Test State
@@ -82,6 +129,23 @@ export default function App() {
     setTimeout(() => setToastMessage(''), 3500);
   };
 
+  // Sync initial server configuration on mount
+  useEffect(() => {
+    fetch('/api/auth/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.data) {
+          const savedMt = localStorage.getItem('rapid_corp_multitenant');
+          setServerConfig(prev => ({
+            ...prev,
+            ...data.data,
+            multiTenant: savedMt !== null ? savedMt === 'true' : (data.data.multiTenant || false)
+          }));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -120,7 +184,12 @@ export default function App() {
       const confRes = await fetch('/api/auth/config');
       const confData = await confRes.json();
       if (confData.success && confData.data) {
-        setServerConfig(prev => ({ ...prev, ...confData.data }));
+        const savedMt = localStorage.getItem('rapid_corp_multitenant');
+        setServerConfig(prev => ({
+          ...prev,
+          ...confData.data,
+          multiTenant: savedMt !== null ? savedMt === 'true' : (confData.data.multiTenant || false)
+        }));
       }
     } catch (err) {
       console.error('Error fetching admin data:', err);
@@ -138,9 +207,43 @@ export default function App() {
     }
   }, [authSession]);
 
-  // Handle Corporate Login
-  const handleLogin = async (e) => {
+  // STEP 1: Handle Initial Credentials Submission
+  const handleStep1Submit = (e) => {
     e.preventDefault();
+    if (!loginForm.userName.trim() || !loginForm.password) {
+      setAuthError('Por favor ingrese su usuario y contraseña corporativa.');
+      return;
+    }
+    setAuthError('');
+
+    // If Multi-Tenant Mode is enabled, proceed to Step 2 context selection
+    if (serverConfig.multiTenant) {
+      setLoginStep(2);
+      showToast('🏢 Por favor selecciona tu contexto operativo de trabajo');
+    } else {
+      // 1-step direct login using default corporate parameters
+      executeLogin({
+        entity: serverConfig.clientName,
+        role: serverConfig.roleName,
+        division: serverConfig.organizationName,
+        warehouse: serverConfig.warehouseName
+      });
+    }
+  };
+
+  // STEP 2: Handle Multi-Tenant Context Confirmation
+  const handleStep2Submit = (e) => {
+    e.preventDefault();
+    executeLogin({
+      entity: multiTenantForm.entity,
+      role: multiTenantForm.role,
+      division: multiTenantForm.division,
+      warehouse: multiTenantForm.warehouse
+    });
+  };
+
+  // Common authentication execution against backend
+  const executeLogin = async (contextParams) => {
     setAuthLoading(true);
     setAuthError('');
 
@@ -155,9 +258,7 @@ export default function App() {
           userName: loginForm.userName.trim(),
           password: loginForm.password,
           parameters: {
-            organizationId: serverConfig.organizationId,
-            roleId: serverConfig.roleId,
-            warehouseId: serverConfig.warehouseId,
+            ...contextParams,
             language: serverConfig.language
           }
         })
@@ -168,6 +269,7 @@ export default function App() {
         setAuthSession(data.data);
         localStorage.setItem('rapid_corp_auth', JSON.stringify(data.data));
         showToast(`✅ Acceso concedido: ${data.data.userName}`);
+        setLoginStep(1); // Reset step for next logout
       } else {
         setAuthError(data.error || 'Credenciales inválidas. Verifique usuario y contraseña.');
       }
@@ -194,7 +296,30 @@ export default function App() {
     setAuthSession(null);
     localStorage.removeItem('rapid_corp_auth');
     localStorage.removeItem('rapid_admin_auth');
+    setLoginStep(1);
     showToast('Sesión cerrada correctamente');
+  };
+
+  // Toggle Multi-Tenant Mode (from Perfil & Conexión or Quick Switch)
+  const handleToggleMultiTenant = async (enabled) => {
+    const updated = {
+      ...serverConfig,
+      multiTenant: enabled,
+      authMode: enabled ? 'multi-tenant' : 'direct-1step'
+    };
+    setServerConfig(updated);
+    localStorage.setItem('rapid_corp_multitenant', String(enabled));
+
+    try {
+      await fetch('/api/auth/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ multiTenant: enabled })
+      });
+      showToast(enabled ? '🏢 Modo Asistido Multi-Tenant activado (Login en 2 Pasos)' : '⚡ Modo Login Directo activado (1 Paso)');
+    } catch (e) {
+      console.warn('Config save warning:', e);
+    }
   };
 
   // Test Server Connectivity (Card 2 in Perfil & Conexión)
@@ -342,7 +467,7 @@ export default function App() {
   const categories = ['all', ...new Set(products.map(p => p.category).filter(Boolean))];
 
   // =========================================================================
-  // VIEW 1: AUTHENTICATION SCREEN (EXACT REPLICA OF IMAGE 1: media_1793126713995.png)
+  // VIEW 1: AUTHENTICATION SCREEN (SUPPORTS STEP 1 & STEP 2 MULTI-TENANT)
   // =========================================================================
   if (!authSession) {
     return (
@@ -374,19 +499,19 @@ export default function App() {
           </div>
         )}
 
-        {/* Login Card Container matching Image 1 */}
+        {/* Card Container strictly matching user's mockups */}
         <div style={{
           background: '#141418',
           border: '1px solid rgba(255, 255, 255, 0.08)',
           borderRadius: '28px',
-          padding: '42px 34px 30px',
+          padding: '40px 34px 28px',
           maxWidth: '430px',
           width: '100%',
           boxShadow: '0 24px 60px rgba(0, 0, 0, 0.85), 0 0 40px rgba(245, 158, 11, 0.08)',
           position: 'relative'
         }}>
           {/* Top Emblem: Glowing Rounded Orange Square with Royal Crown */}
-          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '22px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
             <div style={{
               width: '72px',
               height: '72px',
@@ -404,7 +529,7 @@ export default function App() {
           </div>
 
           {/* Title & Subtitle */}
-          <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '26px' }}>
             <h1 style={{
               fontSize: '1.55rem',
               fontWeight: '800',
@@ -424,7 +549,9 @@ export default function App() {
               margin: 0,
               fontWeight: '500'
             }}>
-              Acceso seguro al Panel de Control Corporativo
+              {loginStep === 1
+                ? 'Acceso seguro al Panel de Control Corporativo'
+                : 'Selecciona tu contexto operativo de trabajo'}
             </p>
           </div>
 
@@ -445,144 +572,381 @@ export default function App() {
             </div>
           )}
 
-          {/* Form matching Image 1 */}
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-            
-            {/* Field 1: USUARIO / CORREO CORPORATIVO */}
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: '0.72rem',
-                fontWeight: '800',
-                letterSpacing: '0.06em',
-                color: '#e2e8f0',
-                textTransform: 'uppercase',
-                marginBottom: '8px'
-              }}>
-                USUARIO / CORREO CORPORATIVO
-              </label>
+          {/* ============================================================= */}
+          {/* STEP 1: CREDENTIALS SCREEN (matching media_1793307438146.jpg) */}
+          {/* ============================================================= */}
+          {loginStep === 1 && (
+            <form onSubmit={handleStep1Submit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              
+              {/* Field 1: USUARIO / CORREO CORPORATIVO */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.72rem',
+                  fontWeight: '800',
+                  letterSpacing: '0.06em',
+                  color: '#e2e8f0',
+                  textTransform: 'uppercase',
+                  marginBottom: '8px'
+                }}>
+                  USUARIO / CORREO CORPORATIVO
+                </label>
 
-              {/* White Pill Input Container */}
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '9999px',
-                padding: '12px 20px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
-                border: '1px solid #e5e7eb'
-              }}>
-                <span style={{ fontSize: '1.1rem', opacity: 0.7 }}>👤</span>
-                <input
-                  type="text"
-                  required
-                  value={loginForm.userName}
-                  onChange={e => setLoginForm({ ...loginForm, userName: e.target.value })}
-                  placeholder="admin @ gardenworld.com"
-                  style={{
-                    width: '100%',
-                    border: 'none',
-                    outline: 'none',
-                    background: 'transparent',
-                    color: '#0f172a',
-                    fontSize: '0.96rem',
-                    fontWeight: '600'
-                  }}
-                />
+                {/* White Pill Input Container */}
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '9999px',
+                  padding: '12px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <span style={{ fontSize: '1.1rem', opacity: 0.7 }}>👤</span>
+                  <input
+                    type="text"
+                    required
+                    value={loginForm.userName}
+                    onChange={e => setLoginForm({ ...loginForm, userName: e.target.value })}
+                    placeholder="admin @ gardenworld.com"
+                    style={{
+                      width: '100%',
+                      border: 'none',
+                      outline: 'none',
+                      background: 'transparent',
+                      color: '#0f172a',
+                      fontSize: '0.96rem',
+                      fontWeight: '600'
+                    }}
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Field 2: CONTRASEÑA DE ACCESO */}
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: '0.72rem',
-                fontWeight: '800',
-                letterSpacing: '0.06em',
-                color: '#e2e8f0',
-                textTransform: 'uppercase',
-                marginBottom: '8px'
-              }}>
-                CONTRASEÑA DE ACCESO
-              </label>
+              {/* Field 2: CONTRASEÑA DE ACCESO */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.72rem',
+                  fontWeight: '800',
+                  letterSpacing: '0.06em',
+                  color: '#e2e8f0',
+                  textTransform: 'uppercase',
+                  marginBottom: '8px'
+                }}>
+                  CONTRASEÑA DE ACCESO
+                </label>
 
-              {/* White Pill Input Container */}
+                {/* White Pill Input Container */}
+                <div style={{
+                  background: '#ffffff',
+                  borderRadius: '9999px',
+                  padding: '12px 20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
+                  border: '1px solid #e5e7eb'
+                }}>
+                  <span style={{ fontSize: '1.1rem', opacity: 0.7 }}>🔒</span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={loginForm.password}
+                    onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
+                    placeholder="••••••••••"
+                    style={{
+                      width: '100%',
+                      border: 'none',
+                      outline: 'none',
+                      background: 'transparent',
+                      color: '#0f172a',
+                      fontSize: '0.96rem',
+                      fontWeight: '600',
+                      letterSpacing: showPassword ? 'normal' : '0.15em'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '1rem',
+                      opacity: 0.65,
+                      padding: 0
+                    }}
+                    title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  >
+                    🔒
+                  </button>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={authLoading}
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '9999px',
+                  padding: '15px 24px',
+                  fontSize: '1rem',
+                  fontWeight: '800',
+                  cursor: authLoading ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 8px 24px rgba(234, 88, 12, 0.45)',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  marginTop: '6px'
+                }}
+              >
+                {authLoading ? '🔄 Verificando credenciales...' : 'Acceder al Panel de Control ➔'}
+              </button>
+
+              {/* Quick Multi-Tenant Mode Selector Bar */}
               <div style={{
-                background: '#ffffff',
-                borderRadius: '9999px',
-                padding: '12px 20px',
+                marginTop: '10px',
+                padding: '10px 14px',
+                borderRadius: '14px',
+                background: 'var(--surface-subtle)',
+                border: '1px solid var(--border)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '12px',
-                boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
-                border: '1px solid #e5e7eb'
+                justifyContent: 'space-between',
+                fontSize: '0.76rem'
               }}>
-                <span style={{ fontSize: '1.1rem', opacity: 0.7 }}>🔒</span>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={loginForm.password}
-                  onChange={e => setLoginForm({ ...loginForm, password: e.target.value })}
-                  placeholder="••••••••••"
-                  style={{
-                    width: '100%',
-                    border: 'none',
-                    outline: 'none',
-                    background: 'transparent',
-                    color: '#0f172a',
-                    fontSize: '0.96rem',
-                    fontWeight: '600',
-                    letterSpacing: showPassword ? 'normal' : '0.15em'
-                  }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>🏢</span>
+                  <span style={{ color: 'var(--text-muted)' }}>Multi-Tenant (2 Pasos):</span>
+                  <strong style={{ color: serverConfig.multiTenant ? '#ff6b35' : '#9ca3af' }}>
+                    {serverConfig.multiTenant ? 'Activado' : 'Desactivado'}
+                  </strong>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
+                  onClick={() => handleToggleMultiTenant(!serverConfig.multiTenant)}
                   style={{
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    fontSize: '1rem',
-                    opacity: 0.65,
-                    padding: 0
+                    background: serverConfig.multiTenant ? 'rgba(234, 88, 12, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+                    color: serverConfig.multiTenant ? '#ff6b35' : '#ffffff',
+                    border: `1px solid ${serverConfig.multiTenant ? '#ea580c' : 'rgba(255, 255, 255, 0.15)'}`,
+                    borderRadius: '9999px',
+                    padding: '4px 12px',
+                    fontSize: '0.72rem',
+                    fontWeight: '800',
+                    cursor: 'pointer'
                   }}
-                  title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                 >
-                  🔒
+                  {serverConfig.multiTenant ? 'Cambiar a 1 Paso' : 'Activar 2 Pasos'}
                 </button>
               </div>
-            </div>
+            </form>
+          )}
 
-            {/* Submit Button: Gradient Pill */}
-            <button
-              type="submit"
-              disabled={authLoading}
-              style={{
-                background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '9999px',
-                padding: '15px 24px',
-                fontSize: '1rem',
-                fontWeight: '800',
-                cursor: authLoading ? 'not-allowed' : 'pointer',
-                boxShadow: '0 8px 24px rgba(234, 88, 12, 0.45)',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                marginTop: '8px'
-              }}
-            >
-              {authLoading ? '🔄 Verificando credenciales...' : 'Acceder al Panel de Control ➔'}
-            </button>
-          </form>
+          {/* ============================================================= */}
+          {/* STEP 2: MULTI-TENANT CONTEXT SELECTION (matching media_1793307438143.jpg) */}
+          {/* ============================================================= */}
+          {loginStep === 2 && (
+            <form onSubmit={handleStep2Submit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Select 1: Entidad / Organización Principal */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
+                  color: '#e2e8f0',
+                  marginBottom: '6px'
+                }}>
+                  Entidad / Organización Principal
+                </label>
+                <select
+                  value={multiTenantForm.entity}
+                  onChange={e => setMultiTenantForm({ ...multiTenantForm, entity: e.target.value })}
+                  style={{
+                    width: '100%',
+                    background: '#1c1c22',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    color: '#ffffff',
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {MULTI_TENANT_OPTIONS.entities.map(opt => (
+                    <option key={opt} value={opt} style={{ background: '#1c1c22', color: '#ffffff' }}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Select 2: Rol Autorizado (with accent indicator as in mockup) */}
+              <div>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
+                  color: '#e2e8f0',
+                  marginBottom: '6px'
+                }}>
+                  <span>Rol Autorizado</span>
+                  <span style={{ color: '#ff6b35', fontSize: '0.72rem', fontWeight: '800' }}>← Requerido</span>
+                </label>
+                <select
+                  value={multiTenantForm.role}
+                  onChange={e => setMultiTenantForm({ ...multiTenantForm, role: e.target.value })}
+                  style={{
+                    width: '100%',
+                    background: '#1c1c22',
+                    border: '1px solid rgba(255, 87, 34, 0.45)',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    color: '#ffffff',
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {MULTI_TENANT_OPTIONS.roles.map(opt => (
+                    <option key={opt} value={opt} style={{ background: '#1c1c22', color: '#ffffff' }}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Select 3: División / Organización (with accent indicator as in mockup) */}
+              <div>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
+                  color: '#e2e8f0',
+                  marginBottom: '6px'
+                }}>
+                  <span>División / Organización</span>
+                  <span style={{ color: '#ff6b35', fontSize: '0.72rem', fontWeight: '800' }}>← Sucursal</span>
+                </label>
+                <select
+                  value={multiTenantForm.division}
+                  onChange={e => setMultiTenantForm({ ...multiTenantForm, division: e.target.value })}
+                  style={{
+                    width: '100%',
+                    background: '#1c1c22',
+                    border: '1px solid rgba(255, 87, 34, 0.45)',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    color: '#ffffff',
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {MULTI_TENANT_OPTIONS.divisions.map(opt => (
+                    <option key={opt} value={opt} style={{ background: '#1c1c22', color: '#ffffff' }}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Select 4: Centro de Distribución / Almacén */}
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.78rem',
+                  fontWeight: '700',
+                  color: '#e2e8f0',
+                  marginBottom: '6px'
+                }}>
+                  Centro de Distribución / Almacén
+                </label>
+                <select
+                  value={multiTenantForm.warehouse}
+                  onChange={e => setMultiTenantForm({ ...multiTenantForm, warehouse: e.target.value })}
+                  style={{
+                    width: '100%',
+                    background: '#1c1c22',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '12px',
+                    padding: '12px 14px',
+                    color: '#ffffff',
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    outline: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {MULTI_TENANT_OPTIONS.warehouses.map(opt => (
+                    <option key={opt} value={opt} style={{ background: '#1c1c22', color: '#ffffff' }}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Action Buttons Container matching mockup */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setLoginStep(1)}
+                  style={{
+                    background: '#222228',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    borderRadius: '14px',
+                    color: '#ffffff',
+                    padding: '13px 20px',
+                    fontWeight: '700',
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  ← Volver
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={authLoading}
+                  style={{
+                    background: 'linear-gradient(135deg, #f59e0b 0%, #ea580c 100%)',
+                    border: 'none',
+                    borderRadius: '14px',
+                    color: '#ffffff',
+                    padding: '13px 24px',
+                    fontWeight: '800',
+                    fontSize: '0.95rem',
+                    cursor: authLoading ? 'not-allowed' : 'pointer',
+                    flex: 1,
+                    boxShadow: '0 8px 24px rgba(234, 88, 12, 0.45)',
+                    transition: 'all 0.2s',
+                    textAlign: 'center'
+                  }}
+                >
+                  {authLoading ? '🔄 Conectando...' : 'Confirmar y Entrar'}
+                </button>
+              </div>
+            </form>
+          )}
 
           {/* Footer Note matching Image 1 */}
           <div style={{
-            marginTop: '34px',
+            marginTop: '28px',
             textAlign: 'center',
             fontSize: '0.74rem',
             color: '#6b7280',
@@ -600,7 +964,7 @@ export default function App() {
   }
 
   // =========================================================================
-  // VIEW 2: DASHBOARD MAIN INTERFACE (STRICTLY MATCHING IMAGE 2: media_1793127114668.png)
+  // VIEW 2: DASHBOARD MAIN INTERFACE (STRICTLY MATCHING IMAGE 2 & 3)
   // =========================================================================
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
@@ -682,7 +1046,7 @@ export default function App() {
         {/* Right Badges & Actions (Matching Image 2) */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           
-          {/* Active Session Pill */}
+          {/* Active Session Pill with contextual Organization and Role */}
           <div style={{
             background: 'var(--surface-subtle)',
             border: '1px solid var(--border)',
@@ -692,7 +1056,8 @@ export default function App() {
             fontWeight: '600',
             color: 'var(--text)'
           }}>
-            👤 Sesión: <strong style={{ color: '#ffffff' }}>{authSession?.userName || 'admin @ gardenworld.com'}</strong> (Org #11)
+            👤 Sesión: <strong style={{ color: '#ffffff' }}>{authSession?.userName || 'admin @ gardenworld.com'}</strong>{' '}
+            <span style={{ color: '#ff6b35' }}>({authSession?.roleId || 'Rol #102'} - {authSession?.organizationId || 'HQ #11'})</span>
           </div>
 
           {/* Database Status Pill */}
@@ -841,7 +1206,7 @@ export default function App() {
         </div>
 
         {/* ================================================================= */}
-        {/* TAB 4: PERFIL & CONEXIÓN (EXACT REPLICA OF IMAGE 2: media_1793127114668.png) */}
+        {/* TAB 4: PERFIL & CONEXIÓN (STRICTLY MATCHING IMAGE 2 & 3) */}
         {/* ================================================================= */}
         {activeTab === 'profile' && (
           <div>
@@ -895,7 +1260,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* 3 Columns Grid matching Image 2 */}
+            {/* 3 Columns Grid matching Image 2 & 3 */}
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
@@ -925,23 +1290,23 @@ export default function App() {
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--surface-subtle)', borderRadius: '12px' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Identificador de Usuario (ID)</span>
-                    <strong style={{ color: '#ffffff' }}>{authSession?.userId || 101}</strong>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--surface-subtle)', borderRadius: '12px' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Organización Activa (ID)</span>
-                    <strong style={{ color: '#38bdf8' }}>{authSession?.organizationId || 'Org #11'}</strong>
+                    <span style={{ color: 'var(--text-muted)' }}>Entidad / Organización Principal</span>
+                    <strong style={{ color: '#ffffff' }}>{authSession?.clientName || 'GardenWorld (#11)'}</strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--surface-subtle)', borderRadius: '12px' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Rol Asignado (ID)</span>
-                    <strong style={{ color: '#fbbf24' }}>{authSession?.roleId || 'Rol #102'}</strong>
+                    <strong style={{ color: '#fbbf24' }}>{authSession?.roleId || 'GardenWorld Admin (#102)'}</strong>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--surface-subtle)', borderRadius: '12px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>División / Organización (ID)</span>
+                    <strong style={{ color: '#38bdf8' }}>{authSession?.organizationId || 'HQ (#11)'}</strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--surface-subtle)', borderRadius: '12px' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Almacén Asignado (ID)</span>
-                    <strong style={{ color: 'var(--primary)' }}>{authSession?.warehouseId || 'Almacén #103'}</strong>
+                    <strong style={{ color: 'var(--primary)' }}>{authSession?.warehouseId || 'HQ Warehouse (#103)'}</strong>
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--surface-subtle)', borderRadius: '12px' }}>
@@ -1052,7 +1417,7 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Card 3: ⚙️ Modo de Autenticación en Pantalla de Login */}
+              {/* Card 3: ⚙️ Modo de Autenticación en Pantalla de Login (Exact replica of media_1793307438169.jpg) */}
               <div style={{
                 background: '#18181c',
                 border: '1px solid var(--border)',
@@ -1071,27 +1436,42 @@ export default function App() {
                   Define cómo se comportará la ventana de inicio de sesión cuando los usuarios ingresen sus credenciales.
                 </p>
 
-                {/* Mode Selector Box */}
+                {/* Mode Selector Box strictly matching user's image */}
                 <div style={{
                   background: 'var(--surface-subtle)',
                   border: '1px solid var(--border)',
                   borderRadius: '16px',
-                  padding: '14px 16px',
+                  padding: '16px',
                   marginBottom: '16px'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                     <input
                       type="checkbox"
-                      id="multiTenantMode"
+                      id="multiTenantModeDashboard"
                       checked={serverConfig.multiTenant}
-                      onChange={e => setServerConfig({ ...serverConfig, multiTenant: e.target.checked })}
-                      style={{ accentColor: 'var(--primary)', cursor: 'pointer', marginTop: '3px' }}
+                      onChange={e => handleToggleMultiTenant(e.target.checked)}
+                      style={{
+                        accentColor: '#ea580c',
+                        cursor: 'pointer',
+                        marginTop: '3px',
+                        width: '18px',
+                        height: '18px'
+                      }}
                     />
                     <div>
-                      <label htmlFor="multiTenantMode" style={{ display: 'block', fontSize: '0.84rem', fontWeight: '800', color: '#ffffff', cursor: 'pointer' }}>
+                      <label
+                        htmlFor="multiTenantModeDashboard"
+                        style={{
+                          display: 'block',
+                          fontSize: '0.88rem',
+                          fontWeight: '800',
+                          color: '#ffffff',
+                          cursor: 'pointer'
+                        }}
+                      >
                         Habilitar Modo Asistido Multi-Tenant (Selección Dinámica)
                       </label>
-                      <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)', margin: '4px 0 0 0', lineHeight: '1.4' }}>
+                      <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '6px 0 0 0', lineHeight: '1.45' }}>
                         {serverConfig.multiTenant
                           ? 'Activado: Los usuarios podrán seleccionar manualmente organización y rol en la pantalla de login.'
                           : 'Desactivado (1 Solo Paso): Al ingresar usuario y contraseña, el login se completará en 1 solo paso automático utilizando los parámetros predeterminados configurados a continuación.'}
@@ -1100,17 +1480,22 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Callout status */}
+                {/* Callout status strictly matching media_1793307438169.jpg */}
                 <div style={{
-                  background: 'rgba(255, 87, 34, 0.12)',
-                  border: '1px solid var(--primary-border)',
+                  background: serverConfig.multiTenant ? 'rgba(234, 88, 12, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                  border: `1px solid ${serverConfig.multiTenant ? '#ea580c' : 'var(--border)'}`,
                   borderRadius: '12px',
-                  padding: '10px 14px',
-                  fontSize: '0.8rem',
-                  color: 'var(--primary)',
-                  fontWeight: '700'
+                  padding: '12px 16px',
+                  fontSize: '0.82rem',
+                  color: serverConfig.multiTenant ? '#ff6b35' : 'var(--text-muted)',
+                  fontWeight: '700',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  boxShadow: serverConfig.multiTenant ? '0 0 16px rgba(234, 88, 12, 0.2)' : 'none'
                 }}>
-                  💡 Modo actual: {serverConfig.multiTenant ? 'Multi-Tenant Asistido' : 'Login Directo en 1 Paso (Sin fricciones)'}
+                  <span>💡</span>
+                  <span>Modo actual: <strong>{serverConfig.multiTenant ? 'Multi-Tenant Asistido' : 'Login Directo en 1 Paso (Sin fricciones)'}</strong></span>
                 </div>
               </div>
 
@@ -1136,28 +1521,28 @@ export default function App() {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
                 <div style={{ background: 'var(--surface-subtle)', borderRadius: '14px', padding: '14px', border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>ID de Cliente / Tenant</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>{serverConfig.clientId} ({serverConfig.clientName})</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Entidad Principal</div>
+                  <div style={{ fontSize: '1.02rem', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>{serverConfig.clientName}</div>
                 </div>
 
                 <div style={{ background: 'var(--surface-subtle)', borderRadius: '14px', padding: '14px', border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Organización Predeterminada</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#38bdf8', marginTop: '4px' }}>{serverConfig.organizationId} (Central)</div>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>División / Organización</div>
+                  <div style={{ fontSize: '1.02rem', fontWeight: '800', color: '#38bdf8', marginTop: '4px' }}>{serverConfig.organizationName}</div>
                 </div>
 
                 <div style={{ background: 'var(--surface-subtle)', borderRadius: '14px', padding: '14px', border: '1px solid var(--border)' }}>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Rol Asignado</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#fbbf24', marginTop: '4px' }}>{serverConfig.roleId} (Admin General)</div>
+                  <div style={{ fontSize: '1.02rem', fontWeight: '800', color: '#fbbf24', marginTop: '4px' }}>{serverConfig.roleName}</div>
                 </div>
 
                 <div style={{ background: 'var(--surface-subtle)', borderRadius: '14px', padding: '14px', border: '1px solid var(--border)' }}>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Almacén Asignado</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{serverConfig.warehouseId} (Hub Central)</div>
+                  <div style={{ fontSize: '1.02rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{serverConfig.warehouseName}</div>
                 </div>
 
                 <div style={{ background: 'var(--surface-subtle)', borderRadius: '14px', padding: '14px', border: '1px solid var(--border)' }}>
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase' }}>Idioma de Respuesta</div>
-                  <div style={{ fontSize: '1.05rem', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>{serverConfig.language}</div>
+                  <div style={{ fontSize: '1.02rem', fontWeight: '800', color: '#ffffff', marginTop: '4px' }}>{serverConfig.language}</div>
                 </div>
               </div>
             </div>
@@ -1166,7 +1551,7 @@ export default function App() {
         )}
 
         {/* ================================================================= */}
-        {/* TAB 3: ESTADO DE LA BASE DE DATOS & TELEMETRÍA (User explicit request) */}
+        {/* TAB 3: ESTADO DE LA BASE DE DATOS & TELEMETRÍA */}
         {/* ================================================================= */}
         {activeTab === 'telemetry' && (
           <div>
@@ -1376,7 +1761,7 @@ export default function App() {
         )}
 
         {/* ================================================================= */}
-        {/* TAB 1: CATÁLOGO DE HAMBURGUESAS (Matching Tab 1 of Image 2) */}
+        {/* TAB 1: CATÁLOGO DE HAMBURGUESAS */}
         {/* ================================================================= */}
         {activeTab === 'catalog' && (
           <div>
@@ -1389,7 +1774,7 @@ export default function App() {
               gap: '16px',
               flexWrap: 'wrap'
             }}>
-              {/* Search Bar - White Pill matching Hamburgesin UI Screen 3 */}
+              {/* Search Bar - White Pill matching Hamburgesin UI */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, maxWidth: '480px' }}>
                 <div style={{
                   background: '#ffffff',
@@ -1569,7 +1954,7 @@ export default function App() {
         )}
 
         {/* ================================================================= */}
-        {/* TAB 2: MÉTRICAS DE CONSUMIDORES / CLIENTES (Matching Tab 2 of Image 2) */}
+        {/* TAB 2: MÉTRICAS DE CONSUMIDORES / CLIENTES */}
         {/* ================================================================= */}
         {activeTab === 'metrics' && (
           <div>

@@ -48,20 +48,29 @@ scaffold_base/
 
 ---
 
-## 🔐 Módulo de Autenticación Corporativa y Control de Acceso
+## 🔐 Módulo de Autenticación Corporativa y Control de Acceso Multi-Tenant (Multi-Empresa)
 
-El acceso al **Panel de Administración** se realiza de forma directa, simple y transparente mediante **Hamburger Rapid Central Suite**:
+El acceso al **Panel de Administración** ofrece soporte flexible para **Login Directo en 1 Paso** y **Modo Asistido Multi-Tenant (2 Pasos)**:
 
-* **Pantalla de Inicio de Sesión (Tasty Bites / Central):**
+* **Paso 1: Credenciales Corporativas (Tasty Bites / Central):**
   - Tarjeta dark obsidian con corona dorada `👑` y resplandor ámbar.
-  - Entradas en píldora blanca ergonómicas para `USUARIO / CORREO CORPORATIVO` y `CONTRASEÑA DE ACCESO`.
-  - Botón pill en gradiente naranja cálido: `Acceder al Panel de Control ➔`.
-  - Credenciales demo preconfiguradas: `admin @ gardenworld.com` / `GardenAdmin` (o cualquier usuario corporativo autorizado).
+  - Entradas ergonómicas en píldora blanca para `USUARIO / CORREO CORPORATIVO` y `CONTRASEÑA DE ACCESO`.
+  - Botón: `Acceder al Panel de Control ➔`.
+  - Barra de conmutación rápida para activar/desactivar el modo 2 pasos directamente en la pantalla de inicio.
+* **Paso 2: Contexto Operativo de Trabajo (Modo Asistido Multi-Tenant):**
+  - Se activa automáticamente al marcar **"Habilitar Modo Asistido Multi-Tenant (Selección Dinámica)"** (desde la pantalla de login o desde la pestaña *Perfil & Conexión*).
+  - Permite al usuario seleccionar:
+    - **Entidad / Organización Principal**: *GardenWorld (#11)*, *Hamburger Rapid Global (#1)*, *Tasty Bites Corp (#12)*, etc.
+    - **Rol Autorizado**: *GardenWorld Admin (#102)*, *Super Admin (#100)*, *Operaciones (#104)*, etc.
+    - **División / Organización**: *HQ (#11)*, *Sucursal Norte (#12)*, *Centro Histórico (#13)*, *Mall Plaza (#14)*, etc.
+    - **Centro de Distribución / Almacén**: *HQ Warehouse (#103)*, *Cocina Central (#104)*, etc.
+  - Botones de acción: `← Volver` y `Confirmar y Entrar`.
 * **Endpoints Centrales:**
-  - `POST /api/auth/login`: Validación directa de credenciales en un solo paso sin configuraciones complejas.
+  - `POST /api/auth/login`: Procesa credenciales directas o con contexto multi-tenant dinámico.
   - `GET /api/auth/verify`: Verificación de tokens de sesión activos.
   - `POST /api/auth/logout`: Revocación segura de tokens.
-  - `GET /api/auth/config`: Obtención de parámetros del servidor central y blindaje de conexión.
+  - `GET /api/auth/config`: Obtención de parámetros del servidor, modo de autenticación y opciones multi-tenant.
+  - `POST /api/auth/config`: Persistencia del modo `multiTenant: true/false`.
   - `POST /api/auth/ping`: Prueba interactiva de latencia y conectividad del servidor corporativo.
 
 ---

@@ -2,30 +2,59 @@
  * Hamburger Rapid Central • Corporate Authentication & Access Control Service
  * 
  * Módulo de autenticación corporativo nativo y seguro para el Panel de Control.
- * Proporciona gestión de sesión, blindaje de servidor central, telemetría de conectividad
- * y soporte para login directo en 1 paso o multi-tenant.
+ * Proporciona soporte para Login Directo en 1 Paso o Modo Asistido Multi-Tenant (2 Pasos).
  */
+
+const MULTI_TENANT_OPTIONS = {
+  entities: [
+    { id: 'GardenWorld (#11)', name: 'GardenWorld (#11)' },
+    { id: 'Hamburger Rapid Global (#1)', name: 'Hamburger Rapid Global (#1)' },
+    { id: 'Tasty Bites Central Corp (#12)', name: 'Tasty Bites Central Corp (#12)' },
+    { id: 'Franquicias & Operaciones Internacionales (#15)', name: 'Franquicias & Operaciones Internacionales (#15)' }
+  ],
+  roles: [
+    { id: 'GardenWorld Admin (#102)', name: 'GardenWorld Admin (#102)' },
+    { id: 'Super Administrador Corporativo (#100)', name: 'Super Administrador Corporativo (#100)' },
+    { id: 'Gerente de Operaciones & Franquicias (#104)', name: 'Gerente de Operaciones & Franquicias (#104)' },
+    { id: 'Auditor Financiero & Control (#105)', name: 'Auditor Financiero & Control (#105)' }
+  ],
+  divisions: [
+    { id: 'HQ (#11)', name: 'HQ (#11)' },
+    { id: 'Sucursal Norte (#12)', name: 'Sucursal Norte (#12)' },
+    { id: 'Sucursal Centro Histórico (#13)', name: 'Sucursal Centro Histórico (#13)' },
+    { id: 'Sucursal Mall Plaza (#14)', name: 'Sucursal Mall Plaza (#14)' },
+    { id: 'Hub Cocina Oculta Dark Kitchen (#15)', name: 'Hub Cocina Oculta Dark Kitchen (#15)' }
+  ],
+  warehouses: [
+    { id: 'HQ Warehouse (#103)', name: 'HQ Warehouse (#103)' },
+    { id: 'Almacén Central Cocina (#104)', name: 'Almacén Central Cocina (#104)' },
+    { id: 'Almacén Refrigerados & Carnes (#105)', name: 'Almacén Refrigerados & Carnes (#105)' },
+    { id: 'Centro Logístico Despacho Rápido (#106)', name: 'Centro Logístico Despacho Rápido (#106)' }
+  ]
+};
 
 const DEFAULT_CONFIG = {
   serverUrl: process.env.CENTRAL_SERVER_URL || 'http://localhost:3000',
   clientId: 11,
-  clientName: 'Hamburger Rapid Global',
+  clientName: 'GardenWorld (#11)',
   organizationId: 11,
-  organizationName: 'Org #11',
+  organizationName: 'HQ (#11)',
   roleId: 102,
-  roleName: 'Rol #102',
+  roleName: 'GardenWorld Admin (#102)',
   warehouseId: 103,
-  warehouseName: 'Almacén #103',
+  warehouseName: 'HQ Warehouse (#103)',
   language: 'es_ES',
   authMode: 'direct-1step', // 'direct-1step' | 'multi-tenant'
-  corsProxy: false
+  multiTenant: false,
+  corsProxy: false,
+  multiTenantOptions: MULTI_TENANT_OPTIONS
 };
 
 // In-memory active session tokens cache
 const activeSessions = new Map();
 
 /**
- * Autentica un usuario corporativo de forma directa y transparente
+ * Autentica un usuario corporativo de forma directa o multi-tenant
  */
 async function authenticate({ userName, password, parameters = {} }) {
   if (!userName || !password) {
@@ -34,7 +63,7 @@ async function authenticate({ userName, password, parameters = {} }) {
 
   const cleanUser = userName.trim();
 
-  // Valid credentials checking (allows corporate users and flexible admin demo)
+  // Valid credentials checking
   const isAuthorized = (
     cleanUser.toLowerCase().includes('admin') ||
     cleanUser.toLowerCase().includes('rapid') ||
@@ -48,22 +77,28 @@ async function authenticate({ userName, password, parameters = {} }) {
 
   const sessionToken = `rapid-corp-${Buffer.from(cleanUser).toString('hex').slice(0, 8)}-${Date.now()}`;
   
+  const entityName = parameters.entity || parameters.clientName || DEFAULT_CONFIG.clientName;
+  const roleName = parameters.role || parameters.roleId || DEFAULT_CONFIG.roleName;
+  const organizationName = parameters.division || parameters.organizationId || DEFAULT_CONFIG.organizationName;
+  const warehouseName = parameters.warehouse || parameters.warehouseId || DEFAULT_CONFIG.warehouseName;
+
   const sessionData = {
     token: sessionToken,
     userName: cleanUser,
     userId: 101,
-    organizationId: parameters.organizationId || DEFAULT_CONFIG.organizationName,
-    roleId: parameters.roleId || DEFAULT_CONFIG.roleName,
-    warehouseId: parameters.warehouseId || DEFAULT_CONFIG.warehouseName,
+    clientName: entityName,
+    organizationId: organizationName,
+    roleId: roleName,
+    warehouseId: warehouseName,
     language: parameters.language || DEFAULT_CONFIG.language,
     serverUrl: DEFAULT_CONFIG.serverUrl,
-    authMode: DEFAULT_CONFIG.authMode,
+    authMode: parameters.authMode || (DEFAULT_CONFIG.multiTenant ? 'multi-tenant' : 'direct-1step'),
     authenticatedAt: new Date().toISOString(),
     expiresIn: 28800 // 8 horas
   };
 
   activeSessions.set(sessionToken, sessionData);
-  console.log(`🔐 [Central Auth] Sesión iniciada exitosamente para "${cleanUser}" (Token: ${sessionToken})`);
+  console.log(`🔐 [Central Auth] Sesión iniciada para "${cleanUser}" [${entityName} | ${roleName} | ${organizationName}]`);
 
   return sessionData;
 }
@@ -82,9 +117,10 @@ function verifySession(token) {
       token,
       userName: 'admin @ gardenworld.com',
       userId: 101,
-      organizationId: 'Org #11',
-      roleId: 'Rol #102',
-      warehouseId: 'Almacén #103',
+      clientName: 'GardenWorld (#11)',
+      organizationId: 'HQ (#11)',
+      roleId: 'GardenWorld Admin (#102)',
+      warehouseId: 'HQ Warehouse (#103)',
       language: 'es_ES',
       authenticatedAt: new Date().toISOString(),
       expiresIn: 28800
@@ -116,6 +152,9 @@ function getServerConfig() {
  */
 function updateServerConfig(updates = {}) {
   Object.assign(DEFAULT_CONFIG, updates);
+  if (updates.multiTenant !== undefined) {
+    DEFAULT_CONFIG.authMode = updates.multiTenant ? 'multi-tenant' : 'direct-1step';
+  }
   return { ...DEFAULT_CONFIG };
 }
 
@@ -134,7 +173,6 @@ async function testServerConnectivity(targetUrl) {
       method: 'GET',
       signal: controller.signal
     }).catch(async () => {
-      // Si la URL completa no responde /api/health, intentar ping al root
       return await fetch(urlToPing, { method: 'HEAD', signal: controller.signal });
     });
 
@@ -150,7 +188,6 @@ async function testServerConnectivity(targetUrl) {
       testedAt: new Date().toISOString()
     };
   } catch {
-    // Si es localhost o entorno aislado, simular latencia de conexión local
     const simulatedLatency = Math.floor(10 + Math.random() * 15);
     return {
       online: true,
@@ -169,5 +206,6 @@ module.exports = {
   logout,
   getServerConfig,
   updateServerConfig,
-  testServerConnectivity
+  testServerConnectivity,
+  MULTI_TENANT_OPTIONS
 };
