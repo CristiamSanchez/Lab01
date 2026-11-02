@@ -64,7 +64,7 @@ const burgers = [
     rating: 5.0,
     prepTime: "14 min",
     calories: "830 kcal",
-    image: "https://images.unsplash.com/photo-1583032015879-66170d49f056?w=600&auto=format&fit=crop&q=80",
+    image: "https://images.unsplash.com/photo-1586816001966-79b736744398?w=600&auto=format&fit=crop&q=80",
     description: "Doble smash de carne madurada 45 días, queso brie francés derretido, mayonesa casera de trufa negra de verano y crujiente de cebolla frita en pan dorado con sésamo negro.",
     ingredients: ["Carne madurada Dry Aged (280g)", "Queso brie francés fundido", "Mayonesa casera de trufa negra", "Cebolla frita crujiente", "Pan brioche artesanal"]
   },
@@ -1342,7 +1342,7 @@ const burgers = [
           <div class="card-img-wrap">
             <span class="specialty-badge">{b.specialtyBadge}</span>
             <span class="rating-badge">★ {b.rating}</span>
-            <img src={b.image} alt={b.name} loading="lazy" />
+            <img src={b.image} alt={b.name} loading="lazy" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80';" />
           </div>
 
           <div class="card-content">
@@ -1506,7 +1506,7 @@ const burgers = [
   <div class="modal-backdrop" id="burgerModal">
     <div class="modal-box">
       <div class="modal-header-img">
-        <img id="modalImg" src="" alt="Hamburguesa Detalle" />
+        <img id="modalImg" src="" alt="Hamburguesa Detalle" onerror="this.onerror=null;this.src='https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80';" />
         <button class="modal-close-btn" id="modalCloseBtn" aria-label="Cerrar modal">&times;</button>
       </div>
 

@@ -1887,6 +1887,10 @@ export default function App() {
                           <img
                             src={burger.image}
                             alt={burger.name}
+                            onError={(e) => {
+                              e.currentTarget.onerror = null;
+                              e.currentTarget.src = 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop&q=80';
+                            }}
                             style={{ width: '56px', height: '56px', borderRadius: '14px', objectFit: 'cover', border: '1px solid var(--border)' }}
                           />
                         </td>

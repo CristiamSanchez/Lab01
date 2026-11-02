@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&auto=format&fit=crop&q=80';
+
 const FALLBACK_PRODUCTS = [
   {
     id: 1,
@@ -52,7 +54,7 @@ const FALLBACK_PRODUCTS = [
     price: 16.99,
     specialty_level: '🥇 Selección Gourmet',
     rating: 5.0,
-    image: 'https://images.unsplash.com/photo-1583032015879-66170d49f056?w=500&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1586816001966-79b736744398?w=500&auto=format&fit=crop&q=80',
     description: 'Doble carne madurada Dry Aged, queso brie francés, mayonesa de trufa negra y crujiente de cebolla frita.',
     ingredients: 'Carne madurada 280g, Queso brie, Salsa trufa negra, Crispy onions.'
   },
@@ -123,6 +125,17 @@ const FALLBACK_PRODUCTS = [
     ingredients: 'Papas rústicas, Trufa blanca, Queso parmesano, Sal de mar.'
   },
   {
+    id: 12,
+    name: 'Aros de Cebolla Beer-Battered',
+    category: 'Complementos',
+    price: 4.90,
+    specialty_level: '🧅 Crujiente Dorado',
+    rating: 4.7,
+    image: 'https://images.unsplash.com/photo-1625938144755-652e08e359b7?w=500&auto=format&fit=crop&q=80',
+    description: 'Aros de cebolla dulce rebozados en masa crujiente de cerveza artesanal rubia servidos con dip alioli sriracha.',
+    ingredients: 'Cebolla dulce vidalia, Rebozado de cerveza rubia, Alioli sriracha ahumado.'
+  },
+  {
     id: 13,
     name: 'Milkshake Vainilla Bourbon',
     category: 'Bebidas',
@@ -132,6 +145,17 @@ const FALLBACK_PRODUCTS = [
     image: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=500&auto=format&fit=crop&q=80',
     description: 'Helado de vainilla natural batido con caramelo salado al bourbon y crema chantilly.',
     ingredients: 'Vainilla natural, Caramelo salado, Chantilly montada.'
+  },
+  {
+    id: 14,
+    name: 'Rapid Artesanal IPA 473ml',
+    category: 'Bebidas',
+    price: 4.50,
+    specialty_level: '🍺 Cerveza de la Casa',
+    rating: 4.8,
+    image: 'https://images.unsplash.com/photo-1600788886242-5c96aabe3757?w=500&auto=format&fit=crop&q=80',
+    description: 'Cerveza artesanal estilo Indian Pale Ale, notas cítricas a maracuyá y pomelo, balance amargo perfecto.',
+    ingredients: 'Lúpulos Citra y Mosaic, Malta de cebada, Agua pura de manantial. 5.8% Alc. Vol.'
   }
 ];
 
@@ -523,6 +547,10 @@ export default function App() {
                   <img
                     src={p.image}
                     alt={p.name}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = FALLBACK_IMAGE;
+                    }}
                     style={{
                       width: '100px',
                       height: '100px',
@@ -652,6 +680,10 @@ export default function App() {
                     <img
                       src={offer.image}
                       alt={offer.title}
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = FALLBACK_IMAGE;
+                      }}
                       style={{ width: '85px', height: '85px', borderRadius: '14px', objectFit: 'cover' }}
                     />
                     <div style={{ flex: 1 }}>
@@ -1058,6 +1090,10 @@ export default function App() {
               <img
                 src={selectedBurgerForModal.image}
                 alt={selectedBurgerForModal.name}
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = FALLBACK_IMAGE;
+                }}
                 style={{ width: '85px', height: '85px', borderRadius: '14px', objectFit: 'cover' }}
               />
               <div>
@@ -1241,6 +1277,10 @@ export default function App() {
                         <img
                           src={item.image}
                           alt={item.name}
+                          onError={(e) => {
+                            e.currentTarget.onerror = null;
+                            e.currentTarget.src = FALLBACK_IMAGE;
+                          }}
                           style={{ width: '50px', height: '50px', borderRadius: '10px', objectFit: 'cover' }}
                         />
                         <div>

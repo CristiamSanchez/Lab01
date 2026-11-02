@@ -58,7 +58,7 @@ const INITIAL_PRODUCTS = [
     stock: 35,
     specialty_level: '🥇 Selección Gourmet',
     rating: 5.0,
-    image: 'https://images.unsplash.com/photo-1583032015879-66170d49f056?w=600&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1586816001966-79b736744398?w=600&auto=format&fit=crop&q=80',
     description: 'Doble smash de carne madurada 45 días, queso brie francés derretido, mayonesa casera de trufa negra de verano y crujiente de cebolla frita en pan dorado con sésamo negro.',
     ingredients: 'Carne madurada Dry Aged (280g), Queso brie derretido, Salsa de trufa negra, Crispy onions, Pan brioche francés.'
   },
@@ -144,7 +144,7 @@ const INITIAL_PRODUCTS = [
     stock: 65,
     specialty_level: '🧅 Crujiente Dorado',
     rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1639024471287-035216709841?w=600&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1625938144755-652e08e359b7?w=600&auto=format&fit=crop&q=80',
     description: 'Aros de cebolla dulce rebozados en masa crujiente de cerveza artesanal rubia servidos con dip de mayonesa sriracha.',
     ingredients: 'Cebolla dulce vidalia, Rebozado de cerveza rubia artesanal, Salsa alioli sriracha ahumada.'
   },
@@ -168,7 +168,7 @@ const INITIAL_PRODUCTS = [
     stock: 70,
     specialty_level: '🍺 Cerveza de la Casa',
     rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1608270199182-3d5f9922e379?w=600&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1600788886242-5c96aabe3757?w=600&auto=format&fit=crop&q=80',
     description: 'Cerveza artesanal estilo Indian Pale Ale, notas cítricas a maracuyá y pomelo, balance amargo perfecto para maridar con hamburguesas.',
     ingredients: 'Lúpulos Citra y Mosaic, Malta de cebada, Agua pura de manantial. 5.8% Alc. Vol.'
   }
