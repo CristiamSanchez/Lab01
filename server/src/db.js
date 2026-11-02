@@ -58,7 +58,7 @@ const INITIAL_PRODUCTS = [
     stock: 35,
     specialty_level: '🥇 Selección Gourmet',
     rating: 5.0,
-    image: 'https://images.unsplash.com/photo-1586816001966-79b736744398?w=600&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1547584370-2cc98b8b8dc8?w=600&auto=format&fit=crop&q=80',
     description: 'Doble smash de carne madurada 45 días, queso brie francés derretido, mayonesa casera de trufa negra de verano y crujiente de cebolla frita en pan dorado con sésamo negro.',
     ingredients: 'Carne madurada Dry Aged (280g), Queso brie derretido, Salsa de trufa negra, Crispy onions, Pan brioche francés.'
   },
@@ -70,7 +70,7 @@ const INITIAL_PRODUCTS = [
     stock: 48,
     specialty_level: '🍗 Crujiente Maestro',
     rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=600&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1551782450-a2132b4ba21d?w=600&auto=format&fit=crop&q=80',
     description: 'Pechuga entera de pollo marinada 24h en suero de leche y 11 especias secretas con rebozado extra crocante, ensalada coleslaw de manzana verde y miel con chipotle ahumado.',
     ingredients: 'Pechuga crujiente de pollo (220g), Coleslaw fresca con manzana verde, Miel de chipotle dulce-picante, Pepinillos dulces.'
   },
@@ -94,7 +94,7 @@ const INITIAL_PRODUCTS = [
     stock: 30,
     specialty_level: '🧀 Explosión de Queso',
     rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?w=600&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=600&auto=format&fit=crop&q=80',
     description: 'Para los auténticos fanáticos del queso: medallón de res bañado en una cascada de salsa de queso cheddar caliente al momento de servir, salpicado con bacon bits y jalapeños suaves.',
     ingredients: 'Medallón de res (220g), Cascada volcánica de queso cheddar caliente, Bits de tocino frito, Rodajas de jalapeño suave.'
   },
@@ -118,7 +118,7 @@ const INITIAL_PRODUCTS = [
     stock: 28,
     specialty_level: '🌶️ Ultra Spicy Fuego',
     rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1607013251379-e6eecfffe234?w=600&auto=format&fit=crop&q=80',
     description: 'Tres medallones smash sazonados con pimientas rojas, queso pepper jack fundido, jalea casera de habanero tostado, guacamole fresco para contrastar y jalapeños crocantes.',
     ingredients: '3x Medallones smash (330g), Queso pepper jack picante, Mermelada casera de habanero, Guacamole cremoso, Pan brioche al ají.'
   },
@@ -144,7 +144,7 @@ const INITIAL_PRODUCTS = [
     stock: 65,
     specialty_level: '🧅 Crujiente Dorado',
     rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1625938144755-652e08e359b7?w=600&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1630825533949-74f62f54553a?w=600&auto=format&fit=crop&q=80',
     description: 'Aros de cebolla dulce rebozados en masa crujiente de cerveza artesanal rubia servidos con dip de mayonesa sriracha.',
     ingredients: 'Cebolla dulce vidalia, Rebozado de cerveza rubia artesanal, Salsa alioli sriracha ahumada.'
   },
@@ -244,6 +244,14 @@ async function initDB() {
           [p.name, p.category, p.price, p.stock, p.specialty_level, p.rating, p.image, p.description, p.ingredients]
         );
       }
+    } else {
+      console.log('🔄 [DB] Sincronizando catálogo e imágenes de Hamburguesas Rapid en MySQL...');
+      for (const p of INITIAL_PRODUCTS) {
+        await connection.query(
+          'UPDATE products SET image = ?, description = ?, ingredients = ?, specialty_level = ?, rating = ?, price = ? WHERE name = ? OR id = ?',
+          [p.image, p.description, p.ingredients, p.specialty_level, p.rating, p.price, p.name, p.id]
+        );
+      }
     }
 
     connection.release();
@@ -264,12 +272,20 @@ async function getProducts() {
   if (isConnectedToMySQL && pool) {
     try {
       const [rows] = await pool.query('SELECT * FROM products ORDER BY id ASC');
-      return rows.map(r => ({
-        ...r,
-        price: parseFloat(r.price) || 0,
-        rating: parseFloat(r.rating) || 0,
-        stock: parseInt(r.stock, 10) || 0
-      }));
+      return rows.map(r => {
+        const init = INITIAL_PRODUCTS.find(p => p.id === r.id || p.name === r.name);
+        let img = r.image;
+        if (!img || img.includes('photo-1583032015879') || img.includes('photo-1639024471287') || img.includes('photo-1608270199182') || img.includes('photo-1625938144755') || img.includes('photo-1565299585323') || img.includes('photo-1586816001966')) {
+          img = init ? init.image : img;
+        }
+        return {
+          ...r,
+          image: img,
+          price: parseFloat(r.price) || 0,
+          rating: parseFloat(r.rating) || 0,
+          stock: parseInt(r.stock, 10) || 0
+        };
+      });
     } catch (err) {
       console.error('Error consultando MySQL, recurriendo a memoria temporal:', err.message);
       lastDbError = err.message;

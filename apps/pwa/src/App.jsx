@@ -54,7 +54,7 @@ const FALLBACK_PRODUCTS = [
     price: 16.99,
     specialty_level: '🥇 Selección Gourmet',
     rating: 5.0,
-    image: 'https://images.unsplash.com/photo-1586816001966-79b736744398?w=500&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1547584370-2cc98b8b8dc8?w=500&auto=format&fit=crop&q=80',
     description: 'Doble carne madurada Dry Aged, queso brie francés, mayonesa de trufa negra y crujiente de cebolla frita.',
     ingredients: 'Carne madurada 280g, Queso brie, Salsa trufa negra, Crispy onions.'
   },
@@ -65,7 +65,7 @@ const FALLBACK_PRODUCTS = [
     price: 11.99,
     specialty_level: '🍗 Crujiente Maestro',
     rating: 4.8,
-    image: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=500&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1551782450-a2132b4ba21d?w=500&auto=format&fit=crop&q=80',
     description: 'Pechuga marinada 24h, empanizado crujiente de 11 especias, ensalada coleslaw de manzana verde y miel de chipotle.',
     ingredients: 'Pechuga pollo crispy 220g, Coleslaw, Miel chipotle, Pepinillos.'
   },
@@ -87,7 +87,7 @@ const FALLBACK_PRODUCTS = [
     price: 14.99,
     specialty_level: '🧀 Explosión de Queso',
     rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1594212699903-ec8a3eca50f5?w=500&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=500&auto=format&fit=crop&q=80',
     description: 'Medallón grueso bañado en cascada de queso cheddar fundido al momento con trocitos de bacon y jalapeños suaves.',
     ingredients: 'Carne res 220g, Cascada cheddar caliente, Bacon bits, Jalapeños.'
   },
@@ -109,7 +109,7 @@ const FALLBACK_PRODUCTS = [
     price: 15.50,
     specialty_level: '🌶️ Ultra Spicy Fuego',
     rating: 4.9,
-    image: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=500&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1607013251379-e6eecfffe234?w=500&auto=format&fit=crop&q=80',
     description: 'Tres medallones smash sazonados, queso pepper jack ardiente, jalea casera de habanero tostado y guacamole fresco.',
     ingredients: '3x Smash 330g, Pepper jack, Mermelada habanero, Guacamole.'
   },
@@ -131,7 +131,7 @@ const FALLBACK_PRODUCTS = [
     price: 4.90,
     specialty_level: '🧅 Crujiente Dorado',
     rating: 4.7,
-    image: 'https://images.unsplash.com/photo-1625938144755-652e08e359b7?w=500&auto=format&fit=crop&q=80',
+    image: 'https://images.unsplash.com/photo-1630825533949-74f62f54553a?w=500&auto=format&fit=crop&q=80',
     description: 'Aros de cebolla dulce rebozados en masa crujiente de cerveza artesanal rubia servidos con dip alioli sriracha.',
     ingredients: 'Cebolla dulce vidalia, Rebozado de cerveza rubia, Alioli sriracha ahumado.'
   },
@@ -244,12 +244,20 @@ export default function App() {
       .then(res => res.json())
       .then(data => {
         if (data.success && data.data && data.data.length > 0) {
-          const normalized = data.data.map(p => ({
-            ...p,
-            price: Number(p.price) || 0,
-            stock: parseInt(p.stock, 10) || 0,
-            rating: Number(p.rating) || 4.9
-          }));
+          const normalized = data.data.map(p => {
+            const fallback = FALLBACK_PRODUCTS.find(f => f.id === p.id || f.name === p.name);
+            let img = p.image;
+            if (!img || img.includes('photo-1583032015879') || img.includes('photo-1639024471287') || img.includes('photo-1608270199182') || img.includes('photo-1625938144755') || img.includes('photo-1565299585323') || img.includes('photo-1586816001966')) {
+              img = fallback ? fallback.image : img;
+            }
+            return {
+              ...p,
+              image: img,
+              price: Number(p.price) || 0,
+              stock: parseInt(p.stock, 10) || 0,
+              rating: Number(p.rating) || 4.9
+            };
+          });
           setProducts(normalized);
         }
       })

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'hamburger-rapid-pwa-v2';
+const CACHE_NAME = 'hamburger-rapid-pwa-v3';
 const ASSETS_TO_CACHE = [
   '/app/',
   '/app/manifest.json',
